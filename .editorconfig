@@ -1,0 +1,29 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_size = 4
+indent_style = space
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{kt,kts}]
+max_line_length = 120
+
+# ── ktlint 규칙 커스터마이징 ─────────────────────────────────────────────────
+
+# Jetpack Compose @Composable 함수는 PascalCase 사용 → function-naming 규칙 예외
+# ktlint 1.x 공식 설정 키
+ktlint_function_naming_ignore_when_annotated_with = Composable
+
+# 와일드카드 import 허용 (Compose에서 자주 사용)
+# ktlint 1.x 규칙 ID: standard:no-wildcard-imports
+ktlint_standard_no-wildcard-imports = disabled
+
+# function-naming 규칙 자체를 disabled (위 ignore 키가 안 먹힐 경우 대비)
+ktlint_standard_function-naming = disabled
+
+# Compose 파일에서 trailing comma 허용
+ij_kotlin_allow_trailing_comma = true
+ij_kotlin_allow_trailing_comma_on_call_site = true
