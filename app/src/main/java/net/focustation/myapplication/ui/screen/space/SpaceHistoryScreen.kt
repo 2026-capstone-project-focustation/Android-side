@@ -267,7 +267,7 @@ private fun SpaceDetailPopup(
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 MetricText("소음", "%.0f dB".format(record.avgNoise), ColorNoise)
                 MetricText("조도", "%.0f lux".format(record.avgIlluminance), ColorLight)
-                MetricText("온도", "%.0f°C".format(record.avgTemperature), ColorTemp)
+                MetricText("진동", "%.2f m/s²".format(record.avgVibration), ColorVibration)
             }
             Spacer(Modifier.height(4.dp))
             Text(
@@ -341,7 +341,7 @@ private fun SpaceListCard(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     SmallTag("소음 %.0fdB".format(record.avgNoise), ColorNoise)
                     SmallTag("%.0flux".format(record.avgIlluminance), ColorLight)
-                    SmallTag("%.0f°C".format(record.avgTemperature), ColorTemp)
+                    SmallTag("%.2fm/s²".format(record.avgVibration), ColorVibration)
                 }
             }
         }

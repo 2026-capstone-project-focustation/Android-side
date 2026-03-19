@@ -8,10 +8,10 @@ import net.focustation.myapplication.data.model.FocusDataPoint
 
 data class SessionReportUiState(
     val totalFocusMinutes: Int = 90,
-    val avgEnvironmentScore: Float = 4.2f,
+    val avgEnvironmentScore: Float = 0f,
     val avgNoise: Float = 38.5f,
     val avgIlluminance: Float = 430f,
-    val avgTemperature: Float = 22.3f,
+    val avgVibration: Double = 0.0,
     val focusTimeline: List<FocusDataPoint> =
         listOf(
             FocusDataPoint("0분", 3.5f),

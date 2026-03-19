@@ -24,7 +24,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import net.focustation.myapplication.data.model.FocusDataPoint
-import net.focustation.myapplication.ui.theme.*
+import net.focustation.myapplication.ui.theme.ColorFocus
+import net.focustation.myapplication.ui.theme.ColorLight
+import net.focustation.myapplication.ui.theme.ColorNoise
+import net.focustation.myapplication.ui.theme.ColorVibration
+import net.focustation.myapplication.ui.theme.FocustationTheme
+import net.focustation.myapplication.ui.theme.Primary40
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -85,7 +90,7 @@ fun SessionReportScreen(
                         )
                         SummaryBadge(
                             label = "환경 적합도",
-                            value = "%.1f / 5.0".format(uiState.avgEnvironmentScore),
+                            value = "%.0f / 100".format(uiState.avgEnvironmentScore),
                             modifier = Modifier.weight(1f),
                         )
                     }
@@ -176,14 +181,10 @@ fun SessionReportScreen(
                     )
                     Spacer(Modifier.height(8.dp))
                     EnvDetailRow(
-                        label = "온도",
-                        value = "%.1f °C".format(uiState.avgTemperature),
-                        color = ColorTemp,
-                        rating =
-                            (
-                                1f -
-                                    kotlin.math.abs(uiState.avgTemperature - 22f) / 10f
-                            ).coerceIn(0f, 1f),
+                        label = "진동",
+                        value = "%.3f m/s²".format(uiState.avgVibration),
+                        color = ColorVibration,
+                        rating = (1f - (uiState.avgVibration / 0.1).toFloat()).coerceIn(0f, 1f),
                     )
                 }
             }
@@ -333,7 +334,7 @@ private fun FocusTimelineChart(
         val w = size.width
         val h = size.height
         val minVal = 0f
-        val maxVal = 5f
+        val maxVal = 100f
         val stepX = w / (dataPoints.size - 1)
         val normalize = { v: Float -> (1f - (v - minVal) / (maxVal - minVal)) * h }
 

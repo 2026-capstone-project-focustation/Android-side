@@ -9,7 +9,7 @@ data class User(
 data class EnvironmentSnapshot(
     val noiseLevel: Float = 35f, // dB
     val illuminance: Float = 420f, // lux
-    val temperature: Float = 22.5f, // °C
+    val vibration: Double = 0.0, // m/s²
 )
 
 data class SessionSummary(
@@ -30,7 +30,7 @@ data class SpaceRecord(
     val sessionCount: Int,
     val avgNoise: Float,
     val avgIlluminance: Float,
-    val avgTemperature: Float,
+    val avgVibration: Double,
     val lastVisited: String,
 )
 

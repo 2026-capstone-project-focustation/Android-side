@@ -20,7 +20,7 @@ import androidx.compose.ui.unit.sp
 import net.focustation.myapplication.ui.theme.ColorFocus
 import net.focustation.myapplication.ui.theme.ColorLight
 import net.focustation.myapplication.ui.theme.ColorNoise
-import net.focustation.myapplication.ui.theme.ColorTemp
+import net.focustation.myapplication.ui.theme.ColorVibration
 
 // ─── 환경 지표 카드 (소음, 조도, 온도) ──────────────────────────────────────
 
@@ -82,7 +82,7 @@ fun EnvMetricCard(
 fun EnvironmentSnapshotRow(
     noise: Float,
     illuminance: Float,
-    temperature: Float,
+    vibration: Double,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -104,10 +104,10 @@ fun EnvironmentSnapshotRow(
             modifier = Modifier.weight(1f),
         )
         EnvMetricCard(
-            label = "온도",
-            value = "%.1f".format(temperature),
-            unit = "°C",
-            indicatorColor = ColorTemp,
+            label = "진동",
+            value = "%.3f".format(vibration),
+            unit = "m/s²",
+            indicatorColor = ColorVibration,
             modifier = Modifier.weight(1f),
         )
     }
@@ -117,11 +117,11 @@ fun EnvironmentSnapshotRow(
 
 @Composable
 fun FocusScoreGauge(
-    score: Float, // 0~5
+    score: Float, // 0~100
     modifier: Modifier = Modifier,
     size: Dp = 120.dp,
 ) {
-    val percentage = (score / 5f).coerceIn(0f, 1f)
+    val percentage = (score / 100f).coerceIn(0f, 1f)
     Box(
         modifier = modifier.size(size),
         contentAlignment = Alignment.Center,
@@ -148,13 +148,13 @@ fun FocusScoreGauge(
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text = "%.1f".format(score),
+                text = "%.0f".format(score),
                 fontSize = (size.value * 0.22f).sp,
                 fontWeight = FontWeight.Bold,
                 color = ColorFocus,
             )
             Text(
-                text = "/ 5.0",
+                text = "/ 100",
                 fontSize = (size.value * 0.10f).sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

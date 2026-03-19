@@ -1,5 +1,9 @@
 package net.focustation.myapplication.ui.screen.session
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -11,10 +15,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import net.focustation.myapplication.ui.components.EnvironmentSnapshotRow
 import net.focustation.myapplication.ui.components.MiniLineGraph
@@ -31,6 +37,14 @@ fun EnvironmentSessionScreen(
     viewModel: EnvironmentSessionViewModel = viewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) viewModel.startNoiseCollection()
+        viewModel.startSession()
+    }
 
     val remaining = (uiState.totalSessionSeconds - uiState.elapsedSeconds).coerceAtLeast(0)
     val remainingMin = remaining / 60
@@ -116,7 +130,7 @@ fun EnvironmentSessionScreen(
                 EnvironmentSnapshotRow(
                     noise = uiState.currentSnapshot.noiseLevel,
                     illuminance = uiState.currentSnapshot.illuminance,
-                    temperature = uiState.currentSnapshot.temperature,
+                    vibration = uiState.currentSnapshot.vibration,
                 )
             }
 
@@ -194,7 +208,7 @@ fun EnvironmentSessionScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            text = "%.1f / 5.0".format(uiState.environmentScore),
+                            text = "%.0f / 100".format(uiState.environmentScore),
                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                             color = ColorFocus,
                         )
@@ -214,7 +228,17 @@ fun EnvironmentSessionScreen(
             ) {
                 if (!uiState.isRunning && !uiState.isPaused) {
                     Button(
-                        onClick = { viewModel.startSession() },
+                        onClick = {
+                            val hasPermission = ContextCompat.checkSelfPermission(
+                                context, Manifest.permission.RECORD_AUDIO,
+                            ) == PackageManager.PERMISSION_GRANTED
+                            if (hasPermission) {
+                                viewModel.startNoiseCollection()
+                                viewModel.startSession()
+                            } else {
+                                permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            }
+                        },
                         modifier =
                             Modifier
                                 .weight(1f)

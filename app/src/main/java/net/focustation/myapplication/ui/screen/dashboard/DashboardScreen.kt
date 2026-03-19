@@ -144,7 +144,7 @@ fun DashboardScreen(
                     EnvironmentSnapshotRow(
                         noise = uiState.environmentSnapshot.noiseLevel,
                         illuminance = uiState.environmentSnapshot.illuminance,
-                        temperature = uiState.environmentSnapshot.temperature,
+                        vibration = uiState.environmentSnapshot.vibration,
                     )
                 }
             }

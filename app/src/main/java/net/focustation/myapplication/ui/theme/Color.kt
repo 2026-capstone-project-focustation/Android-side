@@ -25,5 +25,5 @@ val OnSurfaceDark = Color(0xFFE2E3EC)
 // Sensor indicator colors
 val ColorNoise = Color(0xFFFF6B6B)
 val ColorLight = Color(0xFFFFD060)
-val ColorTemp = Color(0xFF6BD5FF)
+val ColorVibration = Color(0xFFB07CFF)
 val ColorFocus = Color(0xFF5EE8A0)
