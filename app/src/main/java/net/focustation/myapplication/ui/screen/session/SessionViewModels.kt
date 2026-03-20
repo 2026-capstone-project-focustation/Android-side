@@ -68,7 +68,14 @@ class EnvironmentSessionViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // RECORD_AUDIO 권한 획득 후 호출. 중복 호출 방지됨
+    /**
+     * Begins collecting noise (dB) samples from the noise sensor and updates internal buffers and state.
+     *
+     * If noise collection is already active this function returns immediately. Otherwise it sets
+     * `hasNoisePerm = true`, launches a coroutine saved in `noiseJob` that collects dB values from
+     * `noiseManager.getNoiseFlow()`, appends them to the sliding `noiseBuf` (trimming to `WINDOW`),
+     * and invokes `recalculate()` after each sample.
+     */
     fun startNoiseCollection() {
         if (noiseJob != null) return
         hasNoisePerm = true
@@ -81,6 +88,14 @@ class EnvironmentSessionViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * Computes component and total environment scores from the sliding sensor buffers and updates UI state.
+     *
+     * Calculates scores for light and vibration when their buffers contain samples, and includes noise scoring
+     * only if noise permission has been granted and noise samples are available. Updates the current snapshot
+     * with the most recent buffered values (preserving previous snapshot values when a buffer is empty),
+     * refreshes the displayed noise history to the most recent samples, and sets the aggregated environment score.
+     */
     private fun recalculate() {
         val lightScore = if (lightBuf.isNotEmpty()) ScoreCalculator.calculateLightScore(lightBuf.toList()) else null
         val noiseScore = if (hasNoisePerm && noiseBuf.isNotEmpty()) ScoreCalculator.calculateNoiseScore(noiseBuf.toList()) else null
@@ -101,6 +116,11 @@ class EnvironmentSessionViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * Starts the session timer and marks the session as running.
+     *
+     * Cancels any existing timer, sets `isRunning = true` and `isPaused = false`, then launches a timer that increments `elapsedSeconds` by 1 every second until `elapsedSeconds` reaches `totalSessionSeconds` or the session is stopped/paused.
+     */
     fun startSession() {
         _uiState.update { it.copy(isRunning = true, isPaused = false) }
         timerJob?.cancel()
@@ -113,16 +133,31 @@ class EnvironmentSessionViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * Pauses the active session.
+     *
+     * Cancels the running session timer (if any) and updates UI state to set `isRunning` to false and `isPaused` to true.
+     */
     fun pauseSession() {
         timerJob?.cancel()
         _uiState.update { it.copy(isRunning = false, isPaused = true) }
     }
 
+    /**
+     * Stops the current environment session and resets the UI session state to its default values.
+     *
+     * Cancels any running session timer and replaces the view-model UI state with a fresh EnvironmentSessionUiState.
+     */
     fun stopSession() {
         timerJob?.cancel()
         _uiState.update { EnvironmentSessionUiState() }
     }
 
+    /**
+     * Performs cleanup when the ViewModel is being destroyed.
+     *
+     * Cancels the active session timer job if present.
+     */
     override fun onCleared() {
         super.onCleared()
         timerJob?.cancel()
@@ -178,6 +213,14 @@ class FocusSessionViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * Begins collecting noise (dB) samples from the noise sensor and updates internal buffers and state.
+     *
+     * If noise collection is already active this function returns immediately. Otherwise it sets
+     * `hasNoisePerm = true`, launches a coroutine saved in `noiseJob` that collects dB values from
+     * `noiseManager.getNoiseFlow()`, appends them to the sliding `noiseBuf` (trimming to `WINDOW`),
+     * and invokes `recalculate()` after each sample.
+     */
     fun startNoiseCollection() {
         if (noiseJob != null) return
         hasNoisePerm = true
@@ -190,6 +233,13 @@ class FocusSessionViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * Recomputes the environment fit score from the current sensor buffers and updates the UI state.
+     *
+     * Computes component scores from available light, noise (only when permission granted), and vibration buffers,
+     * aggregates them into a total fit score, then sets `environmentFitScore` and appends the value to `fitHistory`
+     * (keeping only the last `DISPLAY_HISTORY` entries).
+     */
     private fun recalculate() {
         val lightScore = if (lightBuf.isNotEmpty()) ScoreCalculator.calculateLightScore(lightBuf.toList()) else null
         val noiseScore = if (hasNoisePerm && noiseBuf.isNotEmpty()) ScoreCalculator.calculateNoiseScore(noiseBuf.toList()) else null
@@ -205,6 +255,11 @@ class FocusSessionViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * Starts the session timer and marks the session as running.
+     *
+     * Cancels any existing timer, sets `isRunning = true` and `isPaused = false`, then launches a job that increments `elapsedSeconds` by one every second while the session remains running.
+     */
     fun startSession() {
         _uiState.update { it.copy(isRunning = true, isPaused = false) }
         timerJob?.cancel()
@@ -217,16 +272,32 @@ class FocusSessionViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * Pauses the active session.
+     *
+     * Cancels the running session timer (if any) and updates UI state to set `isRunning` to false and `isPaused` to true.
+     */
     fun pauseSession() {
         timerJob?.cancel()
         _uiState.update { it.copy(isRunning = false, isPaused = true) }
     }
 
+    /**
+     * Stops the active session and resets its running and paused state.
+     *
+     * Cancels any existing session timer and updates the UI state to set `isRunning = false`
+     * and `isPaused = false`.
+     */
     fun stopSession() {
         timerJob?.cancel()
         _uiState.update { it.copy(isRunning = false, isPaused = false) }
     }
 
+    /**
+     * Performs cleanup when the ViewModel is being destroyed.
+     *
+     * Cancels the active session timer job if present.
+     */
     override fun onCleared() {
         super.onCleared()
         timerJob?.cancel()
@@ -247,22 +318,45 @@ class FeedbackSessionViewModel : androidx.lifecycle.ViewModel() {
     private val _uiState = MutableStateFlow(FeedbackUiState())
     val uiState: StateFlow<FeedbackUiState> = _uiState.asStateFlow()
 
+    /**
+     * Sets the user's overall subjective score in the feedback UI state.
+     *
+     * @param score The subjective score value where 1 = very dissatisfied and 5 = very satisfied.
+     */
     fun updateSubjectiveScore(score: Int) {
         _uiState.update { it.copy(subjectiveScore = score) }
     }
 
+    /**
+     * Update the first feedback question response stored in the view model's UI state.
+     *
+     * @param score The selected response for question 1, where 1 = very dissatisfied and 5 = very satisfied (valid range: 1–5).
+     */
     fun updateQuestion1(score: Int) {
         _uiState.update { it.copy(question1 = score) }
     }
 
+    /**
+     * Update the second questionnaire response in the feedback UI state.
+     *
+     * @param score The user-selected response for question 2 on a 1–5 scale (1 = very dissatisfied, 5 = very satisfied).
+     */
     fun updateQuestion2(score: Int) {
         _uiState.update { it.copy(question2 = score) }
     }
 
+    /**
+     * Updates the stored response for question 3 in the feedback UI state.
+     *
+     * @param score Rating value from 1 (very dissatisfied) to 5 (very satisfied).
+     */
     fun updateQuestion3(score: Int) {
         _uiState.update { it.copy(question3 = score) }
     }
 
+    /**
+     * Marks the feedback as submitted in the view model's UI state.
+     */
     fun submit() {
         _uiState.update { it.copy(submitted = true) }
     }

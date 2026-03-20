@@ -31,6 +31,15 @@ import net.focustation.myapplication.ui.theme.ColorVibration
 import net.focustation.myapplication.ui.theme.FocustationTheme
 import net.focustation.myapplication.ui.theme.Primary40
 
+/**
+ * Renders the session report screen with a header summary, a focus timeline chart, environment metric details, and action buttons.
+ *
+ * The UI displays total focus time and an environment suitability score, a time-series focus chart with labels, detailed rows for noise, illuminance, and vibration (each with a progress indicator), a conditional "save place" button shown only when the report originates from an active session, and action buttons for sharing and retrying the measurement.
+ *
+ * @param onBack Callback invoked when the top app bar back navigation is pressed.
+ * @param onRetry Callback invoked when the user requests to re-measure (the "재측정" button).
+ * @param viewModel The [SessionReportViewModel] providing UI state and actions; defaults to the composable-scoped ViewModel.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SessionReportScreen(
@@ -324,6 +333,14 @@ private fun EnvDetailRow(
     }
 }
 
+/**
+ * Renders a horizontal timeline chart of focus scores using a filled area, a connecting line, and point markers.
+ *
+ * Expects each FocusDataPoint's `focusScore` to be on a 0–100 scale; if `dataPoints` contains fewer than two entries, nothing is rendered.
+ *
+ * @param dataPoints List of focus measurements plotted evenly across the chart width; each item's `focusScore` determines its vertical position.
+ * @param modifier Modifier to apply to the chart layout and drawing area.
+ */
 @Composable
 private fun FocusTimelineChart(
     dataPoints: List<FocusDataPoint>,

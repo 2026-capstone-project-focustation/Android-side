@@ -29,6 +29,17 @@ import net.focustation.myapplication.ui.theme.ColorNoise
 import net.focustation.myapplication.ui.theme.FocustationTheme
 import net.focustation.myapplication.ui.theme.Primary40
 
+/**
+ * Shows the environment analysis session screen and provides controls to start, pause, resume, and end a timed session.
+ *
+ * The composable displays remaining time, a progress indicator, real-time sensor readings (noise, illuminance, vibration),
+ * a noise-level history graph when available, and an environment suitability score. Starting a session will request
+ * microphone permission if needed and begin noise collection when permission is granted. The `onSessionComplete` callback
+ * is invoked when the session finishes due to elapsed time or when the user ends the session.
+ *
+ * @param onSessionComplete Called when the session completes (time elapses or the user ends the session).
+ * @param onBack Called when the user requests navigation back from the screen.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EnvironmentSessionScreen(

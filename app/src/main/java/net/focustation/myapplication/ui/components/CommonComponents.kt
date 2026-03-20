@@ -76,7 +76,13 @@ fun EnvMetricCard(
     }
 }
 
-// ─── 소음 / 조도 / 온도 스냅샷 Row ──────────────────────────────────────────
+/**
+ * Displays a horizontal row of three environment metric cards for noise, illuminance, and vibration.
+ *
+ * Each card shows a colored indicator, the metric value, its unit, and a label. Noise and illuminance
+ * values are formatted as whole numbers (\"%.0f\") with units \"dB\" and \"lux\" respectively; vibration
+ * is formatted with three decimal places (\"%.3f\") and unit \"m/s²\".
+ */
 
 @Composable
 fun EnvironmentSnapshotRow(
@@ -113,7 +119,14 @@ fun EnvironmentSnapshotRow(
     }
 }
 
-// ─── 집중도 게이지 ────────────────────────────────────────────────────────────
+/**
+ * Displays a circular gauge representing a focus score from 0 to 100.
+ *
+ * The gauge shows a semi-transparent background arc and a filled arc whose sweep corresponds
+ * to the score, and centers the numeric score with a trailing "/ 100" label.
+ *
+ * @param score Focus score in the 0–100 range; values outside this range are clamped to that range.
+ * @param size Diameter of the gauge.
 
 @Composable
 fun FocusScoreGauge(

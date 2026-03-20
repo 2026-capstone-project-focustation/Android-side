@@ -24,6 +24,15 @@ import net.focustation.myapplication.ui.theme.ColorFocus
 import net.focustation.myapplication.ui.theme.FocustationTheme
 import net.focustation.myapplication.ui.theme.Primary40
 
+/**
+ * Composes the dashboard screen UI including the bottom navigation, header banner, environment snapshot,
+ * session start button, and recent sessions list.
+ *
+ * @param onStartSession Callback invoked when the "start session" button is pressed.
+ * @param onNavigateToSpaceHistory Callback invoked when the "지도" (map) navigation item is selected.
+ * @param onNavigateToSettings Callback invoked when the "설정" (settings) navigation item is selected.
+ * @param viewModel Provides the UI state displayed by this screen; defaults to `viewModel()`.
+ */
 @Composable
 fun DashboardScreen(
     onStartSession: () -> Unit,

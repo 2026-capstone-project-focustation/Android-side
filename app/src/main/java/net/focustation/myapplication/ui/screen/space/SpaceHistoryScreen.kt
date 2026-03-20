@@ -218,6 +218,15 @@ private fun MapViewPlaceholder(
     }
 }
 
+/**
+ * Displays a popup card showing detailed information for a given space record.
+ *
+ * Shows the space name, average focus score, metrics for noise, illuminance, and vibration,
+ * and session/last-visited summary. Includes a control that invokes `onDismiss` to close the popup.
+ *
+ * @param record The `SpaceRecord` whose details are rendered.
+ * @param onDismiss Callback invoked when the user dismisses the popup.
+ */
 @Composable
 private fun SpaceDetailPopup(
     record: SpaceRecord,
@@ -291,6 +300,15 @@ private fun MetricText(
     }
 }
 
+/**
+ * Displays a clickable card summarizing a space record for the list view.
+ *
+ * Shows the space name, an average focus score badge, session count with last-visited text,
+ * and three small metric tags for noise, illuminance, and vibration.
+ *
+ * @param record The `SpaceRecord` whose data is displayed.
+ * @param onClick Callback invoked when the card is clicked.
+ */
 @Composable
 private fun SpaceListCard(
     record: SpaceRecord,

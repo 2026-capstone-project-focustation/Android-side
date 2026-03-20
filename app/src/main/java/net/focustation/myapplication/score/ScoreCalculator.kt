@@ -32,6 +32,15 @@ object ScoreCalculator {
 
     val DEFAULT_PARAMS = ScoringParams()
 
+    /**
+     * Computes a light quality score from measured illuminance samples.
+     *
+     * Returns 0.0 for an empty sample list.
+     *
+     * @param samples List of illuminance measurements in lux.
+     * @param params Scoring parameters that control the optimal range, stability/level sigmas, and component weights.
+     * @return Score between 0.0 and 100.0 where higher values indicate closer adherence to the configured light level and stability targets.
+     */
     fun calculateLightScore(
         samples: List<Float>,
         params: ScoringParams = DEFAULT_PARAMS,
@@ -61,6 +70,13 @@ object ScoreCalculator {
             .coerceIn(0.0, 100.0)
     }
 
+    /**
+     * Computes a noise comfort score from sound level samples by combining level, peak, and exceedance components.
+     *
+     * @param samples List of sound level measurements in decibels (dB); negative values are clamped to 0 dB.
+     * @param params Configuration of thresholds and weights used to derive level, peak, and exceed fractions.
+     * @return A score between 0.0 and 100.0 where higher values indicate quieter/better noise conditions.
+     */
     fun calculateNoiseScore(
         samples: List<Double>,
         params: ScoringParams = DEFAULT_PARAMS,
@@ -89,12 +105,28 @@ object ScoreCalculator {
             .coerceIn(0.0, 100.0)
     }
 
+    /**
+     * Computes the equivalent continuous sound level (LAeq) from a list of decibel samples.
+     *
+     * @param dbValues List of sound pressure levels in decibels.
+     * @return The LAeq value in decibels computed as 10 * log10(mean(10^(dB/10))). Returns `0.0` if `dbValues` is empty.
+     */
     fun calculateLAeq(dbValues: List<Double>): Double {
         if (dbValues.isEmpty()) return 0.0
         val energyMean = dbValues.sumOf { 10.0.pow(it / 10.0) } / dbValues.size
         return 10.0 * log10(energyMean)
     }
 
+    /**
+     * Computes a vibration quality score from vibration samples by comparing RMS to configured bounds.
+     *
+     * The score is 100 when the computed RMS is at or below `params.vibrationRmsMin`, decreases linearly
+     * as RMS approaches `params.vibrationRmsMax`, and becomes 0 at or above `params.vibrationRmsMax`.
+     * An empty `samples` list yields 0.0.
+     *
+     * @param samples Time-series vibration samples (units must match `params` expectations).
+     * @param params Configuration containing `vibrationRmsMin` and `vibrationRmsMax` used to normalize RMS.
+     * @return A value between 0.0 and 100.0 inclusive where higher values indicate lower vibration (better).
     fun calculateVibrationScore(
         samples: List<Double>,
         params: ScoringParams = DEFAULT_PARAMS,
@@ -112,13 +144,23 @@ object ScoreCalculator {
         return (100.0 * (1.0 - rmsNorm)).coerceIn(0.0, 100.0)
     }
 
+    /**
+     * Computes the overall score as the average of the light, noise, and vibration scores.
+     *
+     * @return The average of the three domain scores, clamped to the range 0.0–100.0.
+     */
     fun calculateTotalScore(
         lightScore: Double,
         noiseScore: Double,
         vibrationScore: Double,
     ): Double = ((lightScore + noiseScore + vibrationScore) / 3.0).coerceIn(0.0, 100.0)
 
-    // 권한 미허용 등으로 일부 센서만 유효할 때 사용
+    /**
+     * Compute the average of the provided domain scores when only a subset of sensors is available.
+     *
+     * @param scores A list of domain scores (e.g., light, noise, vibration). Each value is expected to represent a score on the 0.0–100.0 scale; the list may contain any subset of domains.
+     * @return The arithmetic mean of `scores`, clamped to the range 0.0–100.0. Returns 0.0 if `scores` is empty.
+     */
     fun calculateTotalScore(scores: List<Double>): Double {
         if (scores.isEmpty()) return 0.0
         return scores.average().coerceIn(0.0, 100.0)

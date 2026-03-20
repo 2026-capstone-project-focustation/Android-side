@@ -14,6 +14,11 @@ class LightSensorManager(context: Context) {
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private val lightSensor = sensorManager.getDefaultSensor(Sensor.TYPE_LIGHT)
 
+    /**
+     * Emits ambient light level measurements from the device light sensor.
+     *
+     * @return A cold `Flow` that emits the ambient light level in lux as `Float`. Collection of the flow registers a sensor listener; the listener is unregistered when the collection is cancelled or completes.
+     */
     fun getLightFlow(): Flow<Float> = callbackFlow {
         val listener = object : SensorEventListener {
             override fun onSensorChanged(event: SensorEvent?) {
