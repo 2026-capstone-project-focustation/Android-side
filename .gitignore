@@ -5,8 +5,7 @@
 .DS_Store
 /build
 /captures
-.externalNat
-  iveBuild
+.externalNativeBuild
 .cxx
 local.properties
 app/build
