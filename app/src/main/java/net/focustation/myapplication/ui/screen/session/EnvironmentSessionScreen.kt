@@ -40,6 +40,18 @@ import net.focustation.myapplication.ui.theme.Primary40
  * @param onSessionComplete Called when the session completes (time elapses or the user ends the session).
  * @param onBack Called when the user requests navigation back from the screen.
  */
+/**
+ * Displays the environment analysis session UI and controls for a timed monitoring session.
+ *
+ * Shows remaining time and progress, real-time sensor readings (noise, illuminance, vibration),
+ * a noise history graph, and an environment suitability score. Manages session lifecycle (start,
+ * pause, resume, stop) and requests microphone permission when starting noise collection. When the
+ * session reaches its configured duration while running, `onSessionComplete` is invoked.
+ *
+ * @param onSessionComplete Callback invoked when the session is completed or explicitly ended by the user.
+ * @param onBack Callback invoked when the user navigates back from the screen.
+ * @param viewModel ViewModel that provides UI state and session control actions; defaults to a local instance.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EnvironmentSessionScreen(

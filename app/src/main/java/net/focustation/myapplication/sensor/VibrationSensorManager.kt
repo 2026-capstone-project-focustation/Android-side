@@ -24,6 +24,13 @@ class VibrationSensorManager(context: Context) {
      */
     fun getVibrationFlow(): Flow<Double> = callbackFlow {
         val listener = object : SensorEventListener {
+            /**
+             * Processes sensor change events by computing the magnitude of the first three linear-acceleration components and emitting that value to the flow.
+             *
+             * If `event` or `event.values` is null, the callback is ignored.
+             *
+             * @param event SensorEvent containing acceleration values; uses `values[0]`, `values[1]`, and `values[2]` (x, y, z) to compute the magnitude in meters per second squared.
+             */
             override fun onSensorChanged(event: SensorEvent?) {
                 event?.values?.let { v ->
                     // 3축 선형가속도 벡터 크기: sqrt(x² + y² + z²) m/s²
@@ -31,7 +38,13 @@ class VibrationSensorManager(context: Context) {
                     trySend(magnitude)
                 }
             }
-            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+            /**
+ * Ignores notifications that a sensor's reported accuracy has changed.
+ *
+ * @param sensor The sensor whose accuracy changed, or `null` if unavailable.
+ * @param accuracy One of the `SensorManager.SENSOR_STATUS_*` constants indicating the new accuracy.
+ */
+override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
         }
 
         sensorManager.registerListener(listener, accelSensor, SensorManager.SENSOR_DELAY_UI)

@@ -40,6 +40,17 @@ import net.focustation.myapplication.ui.theme.Primary40
  * @param onRetry Callback invoked when the user requests to re-measure (the "재측정" button).
  * @param viewModel The [SessionReportViewModel] providing UI state and actions; defaults to the composable-scoped ViewModel.
  */
+/**
+ * Displays the session report UI: header summary, focus timeline chart, environment metrics, and action controls.
+ *
+ * Renders a scaffold with a top app bar titled "세션 리포트", a summary banner (total focus minutes and environment score),
+ * a focus timeline chart with time labels, environment detail rows for noise/illuminance/vibration, an optional place-save button
+ * shown only immediately after a session, and share/retry action buttons.
+ *
+ * @param onBack Called when the top app bar navigation icon is pressed.
+ * @param onRetry Called when the "재측정" (retry) action is pressed.
+ * @param viewModel Provides the UI state (`uiState`) used to populate all displayed values and handles place-saving. 
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SessionReportScreen(
@@ -287,6 +298,14 @@ private fun SummaryBadge(
     }
 }
 
+/**
+ * Displays a single environment metric row containing a colored indicator, the metric value, and a progress bar reflecting the metric's suitability.
+ *
+ * @param label The metric label shown next to the colored indicator (e.g., "Noise").
+ * @param value The formatted metric value displayed on the right (e.g., "42.0 dB").
+ * @param color The color used for the indicator dot and the progress bar.
+ * @param rating A fraction between 0 and 1 representing the metric's suitability (0 = worst, 1 = best).
+ */
 @Composable
 private fun EnvDetailRow(
     label: String,

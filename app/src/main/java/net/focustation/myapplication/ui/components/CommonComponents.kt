@@ -24,6 +24,15 @@ import net.focustation.myapplication.ui.theme.ColorVibration
 
 // ─── 환경 지표 카드 (소음, 조도, 온도) ──────────────────────────────────────
 
+/**
+ * Renders a compact metric card showing a colored indicator, a prominent value with its unit, and a label.
+ *
+ * @param label Descriptive text shown below the unit.
+ * @param value Primary metric text displayed prominently.
+ * @param unit Unit text displayed beneath the primary value.
+ * @param indicatorColor Color used for the small circular indicator above the value.
+ * @param modifier Optional [Modifier] applied to the outer Card.
+ */
 @Composable
 fun EnvMetricCard(
     label: String,
@@ -84,6 +93,19 @@ fun EnvMetricCard(
  * is formatted with three decimal places (\"%.3f\") and unit \"m/s²\".
  */
 
+/**
+ * Displays a horizontal row of three environment metric cards: noise, illuminance, and vibration.
+ *
+ * Each card shows a colored indicator dot, a formatted numeric value, a unit label, and a metric label:
+ * - Noise: formatted as "%.0f", unit "dB".
+ * - Illuminance: formatted as "%.0f", unit "lux".
+ * - Vibration: formatted as "%.3f", unit "m/s²".
+ *
+ * @param noise Ambient noise level; displayed rounded to the nearest whole number (dB).
+ * @param illuminance Ambient illuminance; displayed rounded to the nearest whole number (lux).
+ * @param vibration Vibration magnitude; displayed with three decimal places (m/s²).
+ * @param modifier Optional Compose modifier applied to the row container.
+ */
 @Composable
 fun EnvironmentSnapshotRow(
     noise: Float,
@@ -129,6 +151,13 @@ fun EnvironmentSnapshotRow(
  * @param size Diameter of the gauge.
 
 @Composable
+/**
+ * Displays a circular semi-gauge visualizing a focus score from 0 to 100.
+ *
+ * Renders an arc-based gauge whose filled sweep corresponds to the score percentage and shows the numeric score centered inside the gauge.
+ *
+ * @param score Focus score in the range 0..100; values outside this range are clamped to that range.
+ * @param size Diameter of the gauge. */
 fun FocusScoreGauge(
     score: Float, // 0~100
     modifier: Modifier = Modifier,

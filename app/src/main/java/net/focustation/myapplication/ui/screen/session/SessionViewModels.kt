@@ -69,12 +69,11 @@ class EnvironmentSessionViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Begins collecting noise (dB) samples from the noise sensor and updates internal buffers and state.
+     * Starts collecting ambient noise (dB) samples and updates the view model's noise buffer and derived state.
      *
-     * If noise collection is already active this function returns immediately. Otherwise it sets
-     * `hasNoisePerm = true`, launches a coroutine saved in `noiseJob` that collects dB values from
-     * `noiseManager.getNoiseFlow()`, appends them to the sliding `noiseBuf` (trimming to `WINDOW`),
-     * and invokes `recalculate()` after each sample.
+     * If noise collection is already active this is a no-op. Otherwise it sets `hasNoisePerm = true` and
+     * launches a coroutine that collects values from `noiseManager`, appends them to `noiseBuf` (keeping at most
+     * `WINDOW` most recent samples), and invokes `recalculate()` after each sample.
      */
     fun startNoiseCollection() {
         if (noiseJob != null) return
@@ -89,12 +88,12 @@ class EnvironmentSessionViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Computes component and total environment scores from the sliding sensor buffers and updates UI state.
+     * Updates the UI state with component scores and an aggregated environment score derived from available sensor buffers.
      *
-     * Calculates scores for light and vibration when their buffers contain samples, and includes noise scoring
-     * only if noise permission has been granted and noise samples are available. Updates the current snapshot
-     * with the most recent buffered values (preserving previous snapshot values when a buffer is empty),
-     * refreshes the displayed noise history to the most recent samples, and sets the aggregated environment score.
+     * Computes light and vibration component scores when their buffers contain samples, and includes a noise component
+     * only when noise permission has been granted and noise samples exist. Then updates the current snapshot using the
+     * most recent buffered values (retaining previous snapshot values for any empty buffer), refreshes the displayed
+     * noise history to the most recent samples, and sets the aggregated environment score.
      */
     private fun recalculate() {
         val lightScore = if (lightBuf.isNotEmpty()) ScoreCalculator.calculateLightScore(lightBuf.toList()) else null
@@ -214,12 +213,11 @@ class FocusSessionViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Begins collecting noise (dB) samples from the noise sensor and updates internal buffers and state.
+     * Starts collecting ambient noise (dB) samples and updates the view model's noise buffer and derived state.
      *
-     * If noise collection is already active this function returns immediately. Otherwise it sets
-     * `hasNoisePerm = true`, launches a coroutine saved in `noiseJob` that collects dB values from
-     * `noiseManager.getNoiseFlow()`, appends them to the sliding `noiseBuf` (trimming to `WINDOW`),
-     * and invokes `recalculate()` after each sample.
+     * If noise collection is already active this is a no-op. Otherwise it sets `hasNoisePerm = true` and
+     * launches a coroutine that collects values from `noiseManager`, appends them to `noiseBuf` (keeping at most
+     * `WINDOW` most recent samples), and invokes `recalculate()` after each sample.
      */
     fun startNoiseCollection() {
         if (noiseJob != null) return
@@ -328,18 +326,18 @@ class FeedbackSessionViewModel : androidx.lifecycle.ViewModel() {
     }
 
     /**
-     * Update the first feedback question response stored in the view model's UI state.
+     * Updates the response to feedback question 1 in the UI state.
      *
-     * @param score The selected response for question 1, where 1 = very dissatisfied and 5 = very satisfied (valid range: 1–5).
+     * @param score Selected response for question 1 where 1 = very dissatisfied and 5 = very satisfied (valid range 1–5).
      */
     fun updateQuestion1(score: Int) {
         _uiState.update { it.copy(question1 = score) }
     }
 
     /**
-     * Update the second questionnaire response in the feedback UI state.
+     * Set the second questionnaire response in the feedback UI state.
      *
-     * @param score The user-selected response for question 2 on a 1–5 scale (1 = very dissatisfied, 5 = very satisfied).
+     * @param score The response for question 2 on a 1–5 scale (1 = very dissatisfied, 5 = very satisfied).
      */
     fun updateQuestion2(score: Int) {
         _uiState.update { it.copy(question2 = score) }

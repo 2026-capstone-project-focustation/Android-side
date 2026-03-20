@@ -169,7 +169,17 @@ fun SpaceHistoryScreen(
     }
 }
 
-// 지도 영역 자리표시자 (실제 Maps 연동 전)
+/**
+ * Renders a placeholder map area that shows the number of records and up to four clickable pins.
+ *
+ * The pin for `selectedId`, if present among the shown records, is visually highlighted. Clicking a pin
+ * invokes `onPinClick` with that record's id.
+ *
+ * @param records The space records to represent as pins; at most the first four are shown.
+ * @param selectedId The id of the currently selected record, or `null` if none.
+ * @param onPinClick Callback invoked with a record id when its pin is clicked.
+ * @param modifier Modifier applied to the root composable.
+ */
 @Composable
 private fun MapViewPlaceholder(
     records: List<SpaceRecord>,
@@ -288,6 +298,13 @@ private fun SpaceDetailPopup(
     }
 }
 
+/**
+ * Displays a centered metric with a prominent value and a smaller label beneath it.
+ *
+ * @param label The metric label shown below the value (e.g., "Noise").
+ * @param value The metric value shown above the label (formatted string, e.g., "42 dB").
+ * @param color The color applied to the value text.
+ */
 @Composable
 private fun MetricText(
     label: String,

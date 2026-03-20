@@ -33,6 +33,17 @@ import net.focustation.myapplication.ui.theme.Primary40
  * @param onNavigateToSettings Callback invoked when the "설정" (settings) navigation item is selected.
  * @param viewModel Provides the UI state displayed by this screen; defaults to `viewModel()`.
  */
+/**
+ * Composable screen that displays the dashboard: header with user greeting and stats, a current
+ * environment snapshot, a start-session button, and a list of recent sessions.
+ *
+ * Collects UI state from the provided view model and binds it to the Scaffold content and
+ * navigation bar. Navigation and session-start actions are exposed via callback parameters.
+ *
+ * @param onStartSession Invoked when the user taps the "start session" button.
+ * @param onNavigateToSpaceHistory Invoked when the user selects the "지도" (map) navigation item.
+ * @param onNavigateToSettings Invoked when the user selects the "설정" (settings) navigation item.
+ */
 @Composable
 fun DashboardScreen(
     onStartSession: () -> Unit,
