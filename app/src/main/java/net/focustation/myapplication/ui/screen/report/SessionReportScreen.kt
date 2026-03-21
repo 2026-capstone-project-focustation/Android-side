@@ -24,8 +24,33 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import net.focustation.myapplication.data.model.FocusDataPoint
-import net.focustation.myapplication.ui.theme.*
+import net.focustation.myapplication.ui.theme.ColorFocus
+import net.focustation.myapplication.ui.theme.ColorLight
+import net.focustation.myapplication.ui.theme.ColorNoise
+import net.focustation.myapplication.ui.theme.ColorVibration
+import net.focustation.myapplication.ui.theme.FocustationTheme
+import net.focustation.myapplication.ui.theme.Primary40
 
+/**
+ * Renders the session report screen with a header summary, a focus timeline chart, environment metric details, and action buttons.
+ *
+ * The UI displays total focus time and an environment suitability score, a time-series focus chart with labels, detailed rows for noise, illuminance, and vibration (each with a progress indicator), a conditional "save place" button shown only when the report originates from an active session, and action buttons for sharing and retrying the measurement.
+ *
+ * @param onBack Callback invoked when the top app bar back navigation is pressed.
+ * @param onRetry Callback invoked when the user requests to re-measure (the "재측정" button).
+ * @param viewModel The [SessionReportViewModel] providing UI state and actions; defaults to the composable-scoped ViewModel.
+ */
+/**
+ * Displays the session report UI: header summary, focus timeline chart, environment metrics, and action controls.
+ *
+ * Renders a scaffold with a top app bar titled "세션 리포트", a summary banner (total focus minutes and environment score),
+ * a focus timeline chart with time labels, environment detail rows for noise/illuminance/vibration, an optional place-save button
+ * shown only immediately after a session, and share/retry action buttons.
+ *
+ * @param onBack Called when the top app bar navigation icon is pressed.
+ * @param onRetry Called when the "재측정" (retry) action is pressed.
+ * @param viewModel Provides the UI state (`uiState`) used to populate all displayed values and handles place-saving. 
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SessionReportScreen(
@@ -85,7 +110,7 @@ fun SessionReportScreen(
                         )
                         SummaryBadge(
                             label = "환경 적합도",
-                            value = "%.1f / 5.0".format(uiState.avgEnvironmentScore),
+                            value = "%.0f / 100".format(uiState.avgEnvironmentScore),
                             modifier = Modifier.weight(1f),
                         )
                     }
@@ -176,14 +201,10 @@ fun SessionReportScreen(
                     )
                     Spacer(Modifier.height(8.dp))
                     EnvDetailRow(
-                        label = "온도",
-                        value = "%.1f °C".format(uiState.avgTemperature),
-                        color = ColorTemp,
-                        rating =
-                            (
-                                1f -
-                                    kotlin.math.abs(uiState.avgTemperature - 22f) / 10f
-                            ).coerceIn(0f, 1f),
+                        label = "진동",
+                        value = "%.3f m/s²".format(uiState.avgVibration),
+                        color = ColorVibration,
+                        rating = (1f - (uiState.avgVibration / 0.1).toFloat()).coerceIn(0f, 1f),
                     )
                 }
             }
@@ -277,6 +298,14 @@ private fun SummaryBadge(
     }
 }
 
+/**
+ * Displays a single environment metric row containing a colored indicator, the metric value, and a progress bar reflecting the metric's suitability.
+ *
+ * @param label The metric label shown next to the colored indicator (e.g., "Noise").
+ * @param value The formatted metric value displayed on the right (e.g., "42.0 dB").
+ * @param color The color used for the indicator dot and the progress bar.
+ * @param rating A fraction between 0 and 1 representing the metric's suitability (0 = worst, 1 = best).
+ */
 @Composable
 private fun EnvDetailRow(
     label: String,
@@ -323,6 +352,14 @@ private fun EnvDetailRow(
     }
 }
 
+/**
+ * Renders a horizontal timeline chart of focus scores using a filled area, a connecting line, and point markers.
+ *
+ * Expects each FocusDataPoint's `focusScore` to be on a 0–100 scale; if `dataPoints` contains fewer than two entries, nothing is rendered.
+ *
+ * @param dataPoints List of focus measurements plotted evenly across the chart width; each item's `focusScore` determines its vertical position.
+ * @param modifier Modifier to apply to the chart layout and drawing area.
+ */
 @Composable
 private fun FocusTimelineChart(
     dataPoints: List<FocusDataPoint>,
@@ -333,7 +370,7 @@ private fun FocusTimelineChart(
         val w = size.width
         val h = size.height
         val minVal = 0f
-        val maxVal = 5f
+        val maxVal = 100f
         val stepX = w / (dataPoints.size - 1)
         val normalize = { v: Float -> (1f - (v - minVal) / (maxVal - minVal)) * h }
 

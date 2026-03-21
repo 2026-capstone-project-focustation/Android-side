@@ -11,11 +11,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import net.focustation.myapplication.ui.components.FocusScoreGauge
 import net.focustation.myapplication.ui.components.MiniLineGraph
 import net.focustation.myapplication.ui.theme.ColorFocus
@@ -30,6 +37,18 @@ fun FocusSessionScreen(
     viewModel: FocusSessionViewModel = viewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) {
+            viewModel.startNoiseCollection()
+            viewModel.startSession()
+        } else {
+            Toast.makeText(context, "마이크 권한이 필요합니다. 소음 측정 없이 세션을 시작할 수 없습니다.", Toast.LENGTH_LONG).show()
+        }
+    }
 
     val hours = uiState.elapsedSeconds / 3600
     val minutes = (uiState.elapsedSeconds % 3600) / 60
@@ -140,8 +159,8 @@ fun FocusSessionScreen(
                         MiniLineGraph(
                             dataPoints = uiState.fitHistory,
                             lineColor = ColorFocus,
-                            minValue = 1f,
-                            maxValue = 5f,
+                            minValue = 0f,
+                            maxValue = 100f,
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
@@ -206,7 +225,17 @@ fun FocusSessionScreen(
                 when {
                     !uiState.isRunning && !uiState.isPaused -> {
                         Button(
-                            onClick = { viewModel.startSession() },
+                            onClick = {
+                                val hasPermission = ContextCompat.checkSelfPermission(
+                                    context, Manifest.permission.RECORD_AUDIO,
+                                ) == PackageManager.PERMISSION_GRANTED
+                                if (hasPermission) {
+                                    viewModel.startNoiseCollection()
+                                    viewModel.startSession()
+                                } else {
+                                    permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                }
+                            },
                             modifier =
                                 Modifier
                                     .weight(1f)
