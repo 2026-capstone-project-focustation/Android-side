@@ -46,7 +46,11 @@ class VibrationSensorManager(context: Context) {
             override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
         }
 
-        sensorManager.registerListener(listener, accelSensor, SensorManager.SENSOR_DELAY_UI)
+        val registered = sensorManager.registerListener(listener, accelSensor, SensorManager.SENSOR_DELAY_UI)
+        if (!registered) {
+            close()
+            return@callbackFlow
+        }
         awaitClose { sensorManager.unregisterListener(listener) }
     }
 }

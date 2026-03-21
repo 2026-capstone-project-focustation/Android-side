@@ -52,12 +52,14 @@ class NoiseSensorManager {
             return@callbackFlow
         }
 
-        val buffer = ShortArray(bufferSize)
+        val shortBufferSize = bufferSize / 2
+        val buffer = ShortArray(shortBufferSize)
         audioRecord.startRecording()
 
         val job = launch(Dispatchers.IO) {
             while (isActive && audioRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
                 val readSize = audioRecord.read(buffer, 0, buffer.size)
+                if (readSize < 0) break
                 if (readSize > 0) {
                     var sum = 0.0
                     for (i in 0 until readSize) {

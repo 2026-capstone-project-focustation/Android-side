@@ -40,7 +40,11 @@ class LightSensorManager(context: Context) {
             override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
         }
 
-        sensorManager.registerListener(listener, lightSensor, SensorManager.SENSOR_DELAY_UI)
+        val registered = sensorManager.registerListener(listener, lightSensor, SensorManager.SENSOR_DELAY_UI)
+        if (!registered) {
+            close()
+            return@callbackFlow
+        }
         awaitClose { sensorManager.unregisterListener(listener) }
     }
 }
