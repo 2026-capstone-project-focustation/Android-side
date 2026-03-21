@@ -22,7 +22,7 @@ import net.focustation.myapplication.ui.theme.ColorLight
 import net.focustation.myapplication.ui.theme.ColorNoise
 import net.focustation.myapplication.ui.theme.ColorVibration
 
-// ─── 환경 지표 카드 (소음, 조도, 온도) ──────────────────────────────────────
+// ─── 환경 지표 카드 (소음, 조도, 진동) ──────────────────────────────────────
 
 /**
  * Renders a compact metric card showing a colored indicator, a prominent value with its unit, and a label.
@@ -86,20 +86,7 @@ fun EnvMetricCard(
 }
 
 /**
- * Displays a horizontal row of three environment metric cards for noise, illuminance, and vibration.
- *
- * Each card shows a colored indicator, the metric value, its unit, and a label. Noise and illuminance
- * values are formatted as whole numbers (\"%.0f\") with units \"dB\" and \"lux\" respectively; vibration
- * is formatted with three decimal places (\"%.3f\") and unit \"m/s²\".
- */
-
-/**
  * Displays a horizontal row of three environment metric cards: noise, illuminance, and vibration.
- *
- * Each card shows a colored indicator dot, a formatted numeric value, a unit label, and a metric label:
- * - Noise: formatted as "%.0f", unit "dB".
- * - Illuminance: formatted as "%.0f", unit "lux".
- * - Vibration: formatted as "%.3f", unit "m/s²".
  *
  * @param noise Ambient noise level; displayed rounded to the nearest whole number (dB).
  * @param illuminance Ambient illuminance; displayed rounded to the nearest whole number (lux).
@@ -144,26 +131,18 @@ fun EnvironmentSnapshotRow(
 /**
  * Displays a circular gauge representing a focus score from 0 to 100.
  *
- * The gauge shows a semi-transparent background arc and a filled arc whose sweep corresponds
- * to the score, and centers the numeric score with a trailing "/ 100" label.
- *
- * @param score Focus score in the 0–100 range; values outside this range are clamped to that range.
+ * @param score Focus score in the 0–100 range; values outside this range are clamped.
+ * @param modifier Optional Compose modifier.
  * @param size Diameter of the gauge.
-
+ */
 @Composable
-/**
- * Displays a circular semi-gauge visualizing a focus score from 0 to 100.
- *
- * Renders an arc-based gauge whose filled sweep corresponds to the score percentage and shows the numeric score centered inside the gauge.
- *
- * @param score Focus score in the range 0..100; values outside this range are clamped to that range.
- * @param size Diameter of the gauge. */
 fun FocusScoreGauge(
     score: Float, // 0~100
     modifier: Modifier = Modifier,
     size: Dp = 120.dp,
 ) {
-    val percentage = (score / 100f).coerceIn(0f, 1f)
+    val clampedScore = score.coerceIn(0f, 100f)
+    val percentage = clampedScore / 100f
     Box(
         modifier = modifier.size(size),
         contentAlignment = Alignment.Center,
@@ -190,7 +169,7 @@ fun FocusScoreGauge(
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text = "%.0f".format(score),
+                text = "%.0f".format(clampedScore),
                 fontSize = (size.value * 0.22f).sp,
                 fontWeight = FontWeight.Bold,
                 color = ColorFocus,

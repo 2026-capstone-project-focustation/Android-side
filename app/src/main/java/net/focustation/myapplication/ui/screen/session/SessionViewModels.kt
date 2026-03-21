@@ -121,6 +121,11 @@ class EnvironmentSessionViewModel(app: Application) : AndroidViewModel(app) {
      * Cancels any existing timer, sets `isRunning = true` and `isPaused = false`, then launches a timer that increments `elapsedSeconds` by 1 every second until `elapsedSeconds` reaches `totalSessionSeconds` or the session is stopped/paused.
      */
     fun startSession() {
+        if (!_uiState.value.isPaused) {
+            lightBuf.clear()
+            noiseBuf.clear()
+            vibBuf.clear()
+        }
         _uiState.update { it.copy(isRunning = true, isPaused = false) }
         timerJob?.cancel()
         timerJob = viewModelScope.launch {
@@ -149,6 +154,9 @@ class EnvironmentSessionViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun stopSession() {
         timerJob?.cancel()
+        lightBuf.clear()
+        noiseBuf.clear()
+        vibBuf.clear()
         _uiState.update { EnvironmentSessionUiState() }
     }
 
@@ -248,7 +256,11 @@ class FocusSessionViewModel(app: Application) : AndroidViewModel(app) {
         _uiState.update { s ->
             s.copy(
                 environmentFitScore = total,
-                fitHistory = (s.fitHistory + total).takeLast(DISPLAY_HISTORY),
+                fitHistory = if (s.isRunning) {
+                    (s.fitHistory + total).takeLast(DISPLAY_HISTORY)
+                } else {
+                    s.fitHistory
+                },
             )
         }
     }
@@ -259,6 +271,11 @@ class FocusSessionViewModel(app: Application) : AndroidViewModel(app) {
      * Cancels any existing timer, sets `isRunning = true` and `isPaused = false`, then launches a job that increments `elapsedSeconds` by one every second while the session remains running.
      */
     fun startSession() {
+        if (!_uiState.value.isPaused) {
+            lightBuf.clear()
+            noiseBuf.clear()
+            vibBuf.clear()
+        }
         _uiState.update { it.copy(isRunning = true, isPaused = false) }
         timerJob?.cancel()
         timerJob = viewModelScope.launch {
@@ -288,6 +305,9 @@ class FocusSessionViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun stopSession() {
         timerJob?.cancel()
+        lightBuf.clear()
+        noiseBuf.clear()
+        vibBuf.clear()
         _uiState.update { it.copy(isRunning = false, isPaused = false) }
     }
 

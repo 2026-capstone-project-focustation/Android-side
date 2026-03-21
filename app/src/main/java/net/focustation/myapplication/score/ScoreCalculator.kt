@@ -110,12 +110,6 @@ object ScoreCalculator {
     /**
      * Computes the equivalent continuous sound level (LAeq) from a list of decibel samples.
      *
-     * @param dbValues List of sound pressure levels in decibels.
-     * @return The LAeq value in decibels computed as 10 * log10(mean(10^(dB/10))). Returns `0.0` if `dbValues` is empty.
-     */
-    /**
-     * Computes the equivalent continuous sound level (LAeq) from a list of decibel samples.
-     *
      * @param dbValues Sound level samples in decibels (dB).
      * @return The LAeq value in decibels computed as 10 * log10(average(10^(dB/10))). Returns `0.0` if `dbValues` is empty.
      */
@@ -135,16 +129,6 @@ object ScoreCalculator {
      * @param samples Time-series vibration samples (units must match `params` expectations).
      * @param params Configuration containing `vibrationRmsMin` and `vibrationRmsMax` used to normalize RMS.
      * @return A value between 0.0 and 100.0 inclusive where higher values indicate lower vibration (better).
-    /**
-     * Computes a vibration quality score from time-series vibration samples.
-     *
-     * Returns 0.0 when `samples` is empty. Otherwise computes the RMS of `samples`,
-     * normalizes it against `params.vibrationRmsMin` and `params.vibrationRmsMax`, and converts
-     * the normalized RMS into a score where lower RMS yields a higher score.
-     *
-     * @param samples Vibration samples used to compute RMS (same units for all values).
-     * @param params Configuration containing `vibrationRmsMin` and `vibrationRmsMax` for normalization.
-     * @return A value between 0.0 and 100.0 where higher values indicate lower vibration (better quality).
      */
     fun calculateVibrationScore(
         samples: List<Double>,

@@ -33,6 +33,11 @@ class NoiseSensorManager {
      */
     @SuppressLint("MissingPermission")
     fun getNoiseFlow(): Flow<Double> = callbackFlow {
+        if (bufferSize <= 0) {
+            close()
+            return@callbackFlow
+        }
+
         val audioRecord = AudioRecord(
             MediaRecorder.AudioSource.MIC,
             sampleRate,
@@ -40,6 +45,12 @@ class NoiseSensorManager {
             audioFormat,
             bufferSize,
         )
+
+        if (audioRecord.state != AudioRecord.STATE_INITIALIZED) {
+            audioRecord.release()
+            close()
+            return@callbackFlow
+        }
 
         val buffer = ShortArray(bufferSize)
         audioRecord.startRecording()

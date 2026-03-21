@@ -23,6 +23,11 @@ class VibrationSensorManager(context: Context) {
      * @return The measured linear acceleration magnitude as a `Double` for each sensor event.
      */
     fun getVibrationFlow(): Flow<Double> = callbackFlow {
+        if (accelSensor == null) {
+            close()
+            return@callbackFlow
+        }
+
         val listener = object : SensorEventListener {
             /**
              * Processes sensor change events by computing the magnitude of the first three linear-acceleration components and emitting that value to the flow.

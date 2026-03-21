@@ -23,6 +23,11 @@ class LightSensorManager(context: Context) {
      * @return A Flow that emits ambient light level readings (lux) as `Float`.
      */
     fun getLightFlow(): Flow<Float> = callbackFlow {
+        if (lightSensor == null) {
+            close()
+            return@callbackFlow
+        }
+
         val listener = object : SensorEventListener {
             /**
              * Emits the sensor's first value (ambient light level in lux) into the associated flow when a new reading arrives.

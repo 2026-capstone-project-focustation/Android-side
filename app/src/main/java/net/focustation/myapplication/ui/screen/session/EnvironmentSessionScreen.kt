@@ -30,23 +30,7 @@ import net.focustation.myapplication.ui.theme.FocustationTheme
 import net.focustation.myapplication.ui.theme.Primary40
 
 /**
- * Shows the environment analysis session screen and provides controls to start, pause, resume, and end a timed session.
- *
- * The composable displays remaining time, a progress indicator, real-time sensor readings (noise, illuminance, vibration),
- * a noise-level history graph when available, and an environment suitability score. Starting a session will request
- * microphone permission if needed and begin noise collection when permission is granted. The `onSessionComplete` callback
- * is invoked when the session finishes due to elapsed time or when the user ends the session.
- *
- * @param onSessionComplete Called when the session completes (time elapses or the user ends the session).
- * @param onBack Called when the user requests navigation back from the screen.
- */
-/**
  * Displays the environment analysis session UI and controls for a timed monitoring session.
- *
- * Shows remaining time and progress, real-time sensor readings (noise, illuminance, vibration),
- * a noise history graph, and an environment suitability score. Manages session lifecycle (start,
- * pause, resume, stop) and requests microphone permission when starting noise collection. When the
- * session reaches its configured duration while running, `onSessionComplete` is invoked.
  *
  * @param onSessionComplete Callback invoked when the session is completed or explicitly ended by the user.
  * @param onBack Callback invoked when the user navigates back from the screen.
@@ -65,8 +49,10 @@ fun EnvironmentSessionScreen(
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
-        if (granted) viewModel.startNoiseCollection()
-        viewModel.startSession()
+        if (granted) {
+            viewModel.startNoiseCollection()
+            viewModel.startSession()
+        }
     }
 
     val remaining = (uiState.totalSessionSeconds - uiState.elapsedSeconds).coerceAtLeast(0)
