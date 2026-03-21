@@ -11,6 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -44,6 +45,8 @@ fun FocusSessionScreen(
         if (granted) {
             viewModel.startNoiseCollection()
             viewModel.startSession()
+        } else {
+            Toast.makeText(context, "마이크 권한이 필요합니다. 소음 측정 없이 세션을 시작할 수 없습니다.", Toast.LENGTH_LONG).show()
         }
     }
 

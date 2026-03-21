@@ -168,6 +168,7 @@ class EnvironmentSessionViewModel(app: Application) : AndroidViewModel(app) {
     override fun onCleared() {
         super.onCleared()
         timerJob?.cancel()
+        noiseJob?.cancel()
     }
 }
 
@@ -319,6 +320,7 @@ class FocusSessionViewModel(app: Application) : AndroidViewModel(app) {
     override fun onCleared() {
         super.onCleared()
         timerJob?.cancel()
+        noiseJob?.cancel()
     }
 }
 

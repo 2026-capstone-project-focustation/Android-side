@@ -37,15 +37,7 @@ class LightSensorManager(context: Context) {
             override fun onSensorChanged(event: SensorEvent?) {
                 event?.values?.get(0)?.let { trySend(it) }
             }
-            /**
- * Ignores sensor accuracy change notifications.
- *
- * This implementation intentionally performs no action when a sensor's accuracy changes.
- *
- * @param sensor The sensor whose accuracy changed, or `null` if unavailable.
- * @param accuracy One of the sensor accuracy status constants (e.g., `SensorManager.SENSOR_STATUS_ACCURACY_HIGH`).
- */
-override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
         }
 
         sensorManager.registerListener(listener, lightSensor, SensorManager.SENSOR_DELAY_UI)

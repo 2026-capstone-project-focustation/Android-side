@@ -43,13 +43,7 @@ class VibrationSensorManager(context: Context) {
                     trySend(magnitude)
                 }
             }
-            /**
- * Ignores notifications that a sensor's reported accuracy has changed.
- *
- * @param sensor The sensor whose accuracy changed, or `null` if unavailable.
- * @param accuracy One of the `SensorManager.SENSOR_STATUS_*` constants indicating the new accuracy.
- */
-override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
         }
 
         sensorManager.registerListener(listener, accelSensor, SensorManager.SENSOR_DELAY_UI)
