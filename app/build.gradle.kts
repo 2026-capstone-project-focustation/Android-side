@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "net.focustation.myapplication"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "net.focustation.myapplication"
