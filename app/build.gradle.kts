@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ktlint)
+    alias(libs.plugins.googleServices)
 }
 
 android {
@@ -53,6 +54,9 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.maps.compose)
     implementation(libs.play.services.maps)
+    implementation(libs.playServicesAuth)
+    implementation(platform(libs.firebaseBom))
+    implementation(libs.firebaseAuth)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

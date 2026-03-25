@@ -1,10 +1,13 @@
 package net.focustation.myapplication.ui.screen.login
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -15,6 +18,12 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.auth.api.signin.GoogleSignInStatusCodes
+import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.common.GoogleApiAvailability
+import net.focustation.myapplication.R
 import net.focustation.myapplication.ui.theme.FocustationTheme
 
 @Composable
@@ -23,6 +32,36 @@ fun LoginScreen(
     viewModel: LoginViewModel = viewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+    // google-services.json 기준으로 생성되는 값을 사용해 콘솔/앱 불일치를 줄입니다.
+    val webClientId = remember { context.getString(R.string.default_web_client_id) }
+    val googleSignInClient =
+        remember(context, webClientId) {
+            val options =
+                GoogleSignInOptions
+                    .Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                    .requestEmail()
+                    .requestIdToken(webClientId)
+                    .build()
+
+            GoogleSignIn.getClient(context, options)
+        }
+
+    val googleSignInLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            val signInTask = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+
+            try {
+                val account = signInTask.getResult(ApiException::class.java)
+                viewModel.onGoogleIdTokenReceived(account.idToken)
+            } catch (exception: ApiException) {
+                if (exception.statusCode == GoogleSignInStatusCodes.SIGN_IN_CANCELLED) {
+                    viewModel.onGoogleLoginCanceled()
+                } else {
+                    viewModel.onGoogleLoginFailed(messageForGoogleErrorCode(exception.statusCode))
+                }
+            }
+        }
 
     LaunchedEffect(uiState.isLoggedIn) {
         if (uiState.isLoggedIn) onLoginSuccess()
@@ -77,11 +116,15 @@ fun LoginScreen(
 
             // 구글 로그인 버튼
             Button(
-                onClick = { viewModel.onGoogleLogin() },
+                onClick = {
+                    viewModel.onGoogleLoginStarted()
+                    googleSignInLauncher.launch(googleSignInClient.signInIntent)
+                },
                 modifier =
                     Modifier
                         .fillMaxWidth()
                         .height(54.dp),
+                enabled = !uiState.isLoading,
                 shape = RoundedCornerShape(14.dp),
                 colors =
                     ButtonDefaults.buttonColors(
@@ -108,11 +151,12 @@ fun LoginScreen(
 
             // 기타 로그인 버튼 (더미)
             OutlinedButton(
-                onClick = { viewModel.onGoogleLogin() },
+                onClick = {},
                 modifier =
                     Modifier
                         .fillMaxWidth()
                         .height(54.dp),
+                enabled = !uiState.isLoading,
                 shape = RoundedCornerShape(14.dp),
                 colors =
                     ButtonDefaults.outlinedButtonColors(
@@ -134,6 +178,19 @@ fun LoginScreen(
                 color = Color.White.copy(alpha = 0.45f),
                 textAlign = TextAlign.Center,
             )
+
+            uiState.errorMessage?.let { message ->
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFFFFC7C7),
+                    textAlign = TextAlign.Center,
+                )
+                TextButton(onClick = viewModel::clearError) {
+                    Text(text = "닫기", color = Color.White)
+                }
+            }
         }
 
         if (uiState.isLoading) {
@@ -144,6 +201,18 @@ fun LoginScreen(
         }
     }
 }
+
+private fun messageForGoogleErrorCode(statusCode: Int): String =
+    when (statusCode) {
+        10 -> "Google 로그인 설정이 올바르지 않아요. SHA와 OAuth Client ID를 확인해주세요."
+        7 -> "네트워크 연결이 불안정해요. 연결 상태를 확인하고 다시 시도해주세요."
+        8 -> "일시적인 내부 오류가 발생했어요. 잠시 후 다시 시도해주세요."
+        12500 -> "Google 로그인 구성이 맞지 않아요. Firebase 설정을 확인해주세요."
+        else -> {
+            val statusText = GoogleApiAvailability.getInstance().getErrorString(statusCode)
+            "Google 로그인에 실패했어요. (code=$statusCode, $statusText)"
+        }
+    }
 
 @Preview(showBackground = true)
 @Composable
