@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION")
+
 package net.focustation.myapplication.ui.screen.login
 
 import androidx.activity.compose.rememberLauncherForActivityResult
