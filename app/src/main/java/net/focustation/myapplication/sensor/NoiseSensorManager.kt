@@ -14,7 +14,6 @@ import kotlin.math.log10
 import kotlin.math.sqrt
 
 class NoiseSensorManager {
-
     private val sampleRate = 44100
     private val channelConfig = AudioFormat.CHANNEL_IN_MONO
     private val audioFormat = AudioFormat.ENCODING_PCM_16BIT
@@ -32,50 +31,53 @@ class NoiseSensorManager {
      *         each value represents the computed level for that buffer (0.0 if no signal).
      */
     @SuppressLint("MissingPermission")
-    fun getNoiseFlow(): Flow<Double> = callbackFlow {
-        if (bufferSize <= 0) {
-            close()
-            return@callbackFlow
-        }
+    fun getNoiseFlow(): Flow<Double> =
+        callbackFlow {
+            if (bufferSize <= 0) {
+                close()
+                return@callbackFlow
+            }
 
-        val audioRecord = AudioRecord(
-            MediaRecorder.AudioSource.MIC,
-            sampleRate,
-            channelConfig,
-            audioFormat,
-            bufferSize,
-        )
+            val audioRecord =
+                AudioRecord(
+                    MediaRecorder.AudioSource.MIC,
+                    sampleRate,
+                    channelConfig,
+                    audioFormat,
+                    bufferSize,
+                )
 
-        if (audioRecord.state != AudioRecord.STATE_INITIALIZED) {
-            audioRecord.release()
-            close()
-            return@callbackFlow
-        }
+            if (audioRecord.state != AudioRecord.STATE_INITIALIZED) {
+                audioRecord.release()
+                close()
+                return@callbackFlow
+            }
 
-        val shortBufferSize = bufferSize / 2
-        val buffer = ShortArray(shortBufferSize)
-        audioRecord.startRecording()
+            val shortBufferSize = bufferSize / 2
+            val buffer = ShortArray(shortBufferSize)
+            audioRecord.startRecording()
 
-        val job = launch(Dispatchers.IO) {
-            while (isActive && audioRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
-                val readSize = audioRecord.read(buffer, 0, buffer.size)
-                if (readSize < 0) break
-                if (readSize > 0) {
-                    var sum = 0.0
-                    for (i in 0 until readSize) {
-                        sum += buffer[i] * buffer[i]
+            val job =
+                launch(Dispatchers.IO) {
+                    while (isActive && audioRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+                        val readSize = audioRecord.read(buffer, 0, buffer.size)
+                        if (readSize < 0) break
+                        if (readSize > 0) {
+                            var sum = 0.0
+                            for (i in 0 until readSize) {
+                                sum += buffer[i] * buffer[i]
+                            }
+                            val rms = sqrt(sum / readSize)
+                            val db = if (rms > 0) 20 * log10(rms / 32767.0) + 90 else 0.0
+                            trySend(db)
+                        }
                     }
-                    val rms = sqrt(sum / readSize)
-                    val db = if (rms > 0) 20 * log10(rms / 32767.0) + 90 else 0.0
-                    trySend(db)
                 }
+
+            awaitClose {
+                job.cancel()
+                audioRecord.stop()
+                audioRecord.release()
             }
         }
-
-        awaitClose {
-            job.cancel()
-            audioRecord.stop()
-            audioRecord.release()
-        }
-    }
 }
