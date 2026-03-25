@@ -1,0 +1,27 @@
+# IDE 관련
+.idea/
+*.iml
+*.ipr
+*.iws
+.DS_Store
+
+# 빌드 결과물
+build/
+*/build/
+.gradle/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# 로컬 환경 설정 (절대 금지)
+local.properties
+.pnd/
+
+# 보안 및 인증서
+*.jks
+*.keystore
+google-services.json
+
+# 로그 및 임시 파일
+*.log
+/out

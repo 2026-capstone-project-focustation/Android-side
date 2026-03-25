@@ -20,10 +20,19 @@ import androidx.compose.ui.unit.sp
 import net.focustation.myapplication.ui.theme.ColorFocus
 import net.focustation.myapplication.ui.theme.ColorLight
 import net.focustation.myapplication.ui.theme.ColorNoise
-import net.focustation.myapplication.ui.theme.ColorTemp
+import net.focustation.myapplication.ui.theme.ColorVibration
 
-// ─── 환경 지표 카드 (소음, 조도, 온도) ──────────────────────────────────────
+// ─── 환경 지표 카드 (소음, 조도, 진동) ──────────────────────────────────────
 
+/**
+ * Renders a compact metric card showing a colored indicator, a prominent value with its unit, and a label.
+ *
+ * @param label Descriptive text shown below the unit.
+ * @param value Primary metric text displayed prominently.
+ * @param unit Unit text displayed beneath the primary value.
+ * @param indicatorColor Color used for the small circular indicator above the value.
+ * @param modifier Optional [Modifier] applied to the outer Card.
+ */
 @Composable
 fun EnvMetricCard(
     label: String,
@@ -76,13 +85,19 @@ fun EnvMetricCard(
     }
 }
 
-// ─── 소음 / 조도 / 온도 스냅샷 Row ──────────────────────────────────────────
-
+/**
+ * Displays a horizontal row of three environment metric cards: noise, illuminance, and vibration.
+ *
+ * @param noise Ambient noise level; displayed rounded to the nearest whole number (dB).
+ * @param illuminance Ambient illuminance; displayed rounded to the nearest whole number (lux).
+ * @param vibration Vibration magnitude; displayed with three decimal places (m/s²).
+ * @param modifier Optional Compose modifier applied to the row container.
+ */
 @Composable
 fun EnvironmentSnapshotRow(
     noise: Float,
     illuminance: Float,
-    temperature: Float,
+    vibration: Double,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -104,24 +119,30 @@ fun EnvironmentSnapshotRow(
             modifier = Modifier.weight(1f),
         )
         EnvMetricCard(
-            label = "온도",
-            value = "%.1f".format(temperature),
-            unit = "°C",
-            indicatorColor = ColorTemp,
+            label = "진동",
+            value = "%.3f".format(vibration),
+            unit = "m/s²",
+            indicatorColor = ColorVibration,
             modifier = Modifier.weight(1f),
         )
     }
 }
 
-// ─── 집중도 게이지 ────────────────────────────────────────────────────────────
-
+/**
+ * Displays a circular gauge representing a focus score from 0 to 100.
+ *
+ * @param score Focus score in the 0–100 range; values outside this range are clamped.
+ * @param modifier Optional Compose modifier.
+ * @param size Diameter of the gauge.
+ */
 @Composable
 fun FocusScoreGauge(
-    score: Float, // 0~5
+    score: Float, // 0~100
     modifier: Modifier = Modifier,
     size: Dp = 120.dp,
 ) {
-    val percentage = (score / 5f).coerceIn(0f, 1f)
+    val clampedScore = score.coerceIn(0f, 100f)
+    val percentage = clampedScore / 100f
     Box(
         modifier = modifier.size(size),
         contentAlignment = Alignment.Center,
@@ -148,13 +169,13 @@ fun FocusScoreGauge(
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text = "%.1f".format(score),
+                text = "%.0f".format(clampedScore),
                 fontSize = (size.value * 0.22f).sp,
                 fontWeight = FontWeight.Bold,
                 color = ColorFocus,
             )
             Text(
-                text = "/ 5.0",
+                text = "/ 100",
                 fontSize = (size.value * 0.10f).sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

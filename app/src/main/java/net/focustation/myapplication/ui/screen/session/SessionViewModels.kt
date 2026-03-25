@@ -1,14 +1,20 @@
 package net.focustation.myapplication.ui.screen.session
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import net.focustation.myapplication.data.model.EnvironmentSnapshot
+import net.focustation.myapplication.score.ScoreCalculator
+import net.focustation.myapplication.sensor.LightSensorManager
+import net.focustation.myapplication.sensor.NoiseSensorManager
+import net.focustation.myapplication.sensor.VibrationSensorManager
 
 // ─── 환경 분석 세션 ───────────────────────────────────────────────────────────
 
@@ -19,54 +25,150 @@ data class EnvironmentSessionUiState(
     val totalSessionSeconds: Int = 300, // 5분
     val noiseHistory: List<Float> = emptyList(),
     val currentSnapshot: EnvironmentSnapshot = EnvironmentSnapshot(),
-    val environmentScore: Float = 0f,
+    val environmentScore: Float = 0f, // 0~100
 )
 
-class EnvironmentSessionViewModel : ViewModel() {
+class EnvironmentSessionViewModel(app: Application) : AndroidViewModel(app) {
+
+    private val lightManager = LightSensorManager(app)
+    private val noiseManager = NoiseSensorManager()
+    private val vibrationManager = VibrationSensorManager(app)
+
     private val _uiState = MutableStateFlow(EnvironmentSessionUiState())
     val uiState: StateFlow<EnvironmentSessionUiState> = _uiState.asStateFlow()
 
     private var timerJob: Job? = null
+    private var noiseJob: Job? = null
+    private var hasNoisePerm = false
 
-    fun startSession() {
-        _uiState.value = _uiState.value.copy(isRunning = true, isPaused = false)
-        timerJob =
-            viewModelScope.launch {
-                while (_uiState.value.elapsedSeconds < _uiState.value.totalSessionSeconds) {
-                    delay(1000L)
-                    val elapsed = _uiState.value.elapsedSeconds + 1
-                    val noise = (30 + Math.random() * 20).toFloat()
-                    val newHistory = (_uiState.value.noiseHistory + noise).takeLast(20)
-                    _uiState.value =
-                        _uiState.value.copy(
-                            elapsedSeconds = elapsed,
-                            noiseHistory = newHistory,
-                            currentSnapshot =
-                                EnvironmentSnapshot(
-                                    noiseLevel = noise,
-                                    illuminance = (380 + Math.random() * 100).toFloat(),
-                                    temperature = (21 + Math.random() * 3).toFloat(),
-                                ),
-                            environmentScore = ((4.0 + Math.random()).toFloat()).coerceAtMost(5f),
-                        )
-                    if (!_uiState.value.isRunning) break
-                }
+    // 슬라이딩 윈도우 버퍼 (30샘플 ≈ 30초)
+    private val lightBuf = ArrayDeque<Float>()
+    private val noiseBuf = ArrayDeque<Double>()
+    private val vibBuf = ArrayDeque<Double>()
+
+    companion object {
+        private const val WINDOW = 30
+        private const val DISPLAY_HISTORY = 20
+    }
+
+    init {
+        viewModelScope.launch {
+            lightManager.getLightFlow().collect { lux ->
+                lightBuf.addLast(lux)
+                if (lightBuf.size > WINDOW) lightBuf.removeFirst()
+                recalculate()
             }
+        }
+        viewModelScope.launch {
+            vibrationManager.getVibrationFlow().collect { m ->
+                vibBuf.addLast(m)
+                if (vibBuf.size > WINDOW) vibBuf.removeFirst()
+                recalculate()
+            }
+        }
     }
 
-    fun pauseSession() {
-        _uiState.value = _uiState.value.copy(isRunning = false, isPaused = true)
+    /**
+     * Starts collecting ambient noise (dB) samples and updates the view model's noise buffer and derived state.
+     *
+     * If noise collection is already active this is a no-op. Otherwise it sets `hasNoisePerm = true` and
+     * launches a coroutine that collects values from `noiseManager`, appends them to `noiseBuf` (keeping at most
+     * `WINDOW` most recent samples), and invokes `recalculate()` after each sample.
+     */
+    fun startNoiseCollection() {
+        if (noiseJob != null) return
+        hasNoisePerm = true
+        noiseJob = viewModelScope.launch {
+            noiseManager.getNoiseFlow().collect { db ->
+                noiseBuf.addLast(db)
+                if (noiseBuf.size > WINDOW) noiseBuf.removeFirst()
+                recalculate()
+            }
+        }
+    }
+
+    /**
+     * Updates the UI state with component scores and an aggregated environment score derived from available sensor buffers.
+     *
+     * Computes light and vibration component scores when their buffers contain samples, and includes a noise component
+     * only when noise permission has been granted and noise samples exist. Then updates the current snapshot using the
+     * most recent buffered values (retaining previous snapshot values for any empty buffer), refreshes the displayed
+     * noise history to the most recent samples, and sets the aggregated environment score.
+     */
+    private fun recalculate() {
+        val lightScore = if (lightBuf.isNotEmpty()) ScoreCalculator.calculateLightScore(lightBuf.toList()) else null
+        val noiseScore = if (hasNoisePerm && noiseBuf.isNotEmpty()) ScoreCalculator.calculateNoiseScore(noiseBuf.toList()) else null
+        val vibScore = if (vibBuf.isNotEmpty()) ScoreCalculator.calculateVibrationScore(vibBuf.toList()) else null
+
+        val total = ScoreCalculator.calculateTotalScore(listOfNotNull(lightScore, noiseScore, vibScore)).toFloat()
+
+        _uiState.update { s ->
+            s.copy(
+                currentSnapshot = EnvironmentSnapshot(
+                    noiseLevel = noiseBuf.lastOrNull()?.toFloat() ?: s.currentSnapshot.noiseLevel,
+                    illuminance = lightBuf.lastOrNull() ?: s.currentSnapshot.illuminance,
+                    vibration = vibBuf.lastOrNull() ?: s.currentSnapshot.vibration,
+                ),
+                noiseHistory = noiseBuf.takeLast(DISPLAY_HISTORY).map { it.toFloat() },
+                environmentScore = total,
+            )
+        }
+    }
+
+    /**
+     * Starts the session timer and marks the session as running.
+     *
+     * Cancels any existing timer, sets `isRunning = true` and `isPaused = false`, then launches a timer that increments `elapsedSeconds` by 1 every second until `elapsedSeconds` reaches `totalSessionSeconds` or the session is stopped/paused.
+     */
+    fun startSession() {
+        if (!_uiState.value.isPaused) {
+            lightBuf.clear()
+            noiseBuf.clear()
+            vibBuf.clear()
+        }
+        _uiState.update { it.copy(isRunning = true, isPaused = false) }
         timerJob?.cancel()
+        timerJob = viewModelScope.launch {
+            while (_uiState.value.elapsedSeconds < _uiState.value.totalSessionSeconds) {
+                delay(1000L)
+                if (!_uiState.value.isRunning) break
+                _uiState.update { it.copy(elapsedSeconds = it.elapsedSeconds + 1) }
+            }
+        }
     }
 
+    /**
+     * Pauses the active session.
+     *
+     * Cancels the running session timer (if any) and updates UI state to set `isRunning` to false and `isPaused` to true.
+     */
+    fun pauseSession() {
+        timerJob?.cancel()
+        _uiState.update { it.copy(isRunning = false, isPaused = true) }
+    }
+
+    /**
+     * Stops the current environment session and resets the UI session state to its default values.
+     *
+     * Cancels any running session timer and replaces the view-model UI state with a fresh EnvironmentSessionUiState.
+     */
     fun stopSession() {
         timerJob?.cancel()
-        _uiState.value = EnvironmentSessionUiState()
+        lightBuf.clear()
+        noiseBuf.clear()
+        vibBuf.clear()
+        _uiState.update { EnvironmentSessionUiState() }
     }
 
+    /**
+     * Performs cleanup when the ViewModel is being destroyed.
+     *
+     * Cancels the active session timer job if present.
+     */
     override fun onCleared() {
         super.onCleared()
         timerJob?.cancel()
+        noiseJob?.cancel()
     }
 }
 
@@ -76,49 +178,149 @@ data class FocusSessionUiState(
     val isRunning: Boolean = false,
     val isPaused: Boolean = false,
     val elapsedSeconds: Int = 0,
-    val environmentFitScore: Float = 4.2f,
+    val environmentFitScore: Float = 0f, // 0~100
     val fitHistory: List<Float> = emptyList(),
 )
 
-class FocusSessionViewModel : ViewModel() {
+class FocusSessionViewModel(app: Application) : AndroidViewModel(app) {
+
+    private val lightManager = LightSensorManager(app)
+    private val noiseManager = NoiseSensorManager()
+    private val vibrationManager = VibrationSensorManager(app)
+
     private val _uiState = MutableStateFlow(FocusSessionUiState())
     val uiState: StateFlow<FocusSessionUiState> = _uiState.asStateFlow()
 
     private var timerJob: Job? = null
+    private var noiseJob: Job? = null
+    private var hasNoisePerm = false
 
-    fun startSession() {
-        _uiState.value = _uiState.value.copy(isRunning = true, isPaused = false)
-        timerJob =
-            viewModelScope.launch {
-                while (true) {
-                    delay(1000L)
-                    if (!_uiState.value.isRunning) break
-                    val elapsed = _uiState.value.elapsedSeconds + 1
-                    val fit = (3.5 + Math.random() * 1.5).toFloat()
-                    val newHistory = (_uiState.value.fitHistory + fit).takeLast(30)
-                    _uiState.value =
-                        _uiState.value.copy(
-                            elapsedSeconds = elapsed,
-                            environmentFitScore = fit,
-                            fitHistory = newHistory,
-                        )
-                }
+    private val lightBuf = ArrayDeque<Float>()
+    private val noiseBuf = ArrayDeque<Double>()
+    private val vibBuf = ArrayDeque<Double>()
+
+    companion object {
+        private const val WINDOW = 30
+        private const val DISPLAY_HISTORY = 30
+    }
+
+    init {
+        viewModelScope.launch {
+            lightManager.getLightFlow().collect { lux ->
+                lightBuf.addLast(lux)
+                if (lightBuf.size > WINDOW) lightBuf.removeFirst()
+                recalculate()
             }
+        }
+        viewModelScope.launch {
+            vibrationManager.getVibrationFlow().collect { m ->
+                vibBuf.addLast(m)
+                if (vibBuf.size > WINDOW) vibBuf.removeFirst()
+                recalculate()
+            }
+        }
     }
 
-    fun pauseSession() {
-        _uiState.value = _uiState.value.copy(isRunning = false, isPaused = true)
+    /**
+     * Starts collecting ambient noise (dB) samples and updates the view model's noise buffer and derived state.
+     *
+     * If noise collection is already active this is a no-op. Otherwise it sets `hasNoisePerm = true` and
+     * launches a coroutine that collects values from `noiseManager`, appends them to `noiseBuf` (keeping at most
+     * `WINDOW` most recent samples), and invokes `recalculate()` after each sample.
+     */
+    fun startNoiseCollection() {
+        if (noiseJob != null) return
+        hasNoisePerm = true
+        noiseJob = viewModelScope.launch {
+            noiseManager.getNoiseFlow().collect { db ->
+                noiseBuf.addLast(db)
+                if (noiseBuf.size > WINDOW) noiseBuf.removeFirst()
+                recalculate()
+            }
+        }
+    }
+
+    /**
+     * Recomputes the environment fit score from the current sensor buffers and updates the UI state.
+     *
+     * Computes component scores from available light, noise (only when permission granted), and vibration buffers,
+     * aggregates them into a total fit score, then sets `environmentFitScore` and appends the value to `fitHistory`
+     * (keeping only the last `DISPLAY_HISTORY` entries).
+     */
+    private fun recalculate() {
+        val lightScore = if (lightBuf.isNotEmpty()) ScoreCalculator.calculateLightScore(lightBuf.toList()) else null
+        val noiseScore = if (hasNoisePerm && noiseBuf.isNotEmpty()) ScoreCalculator.calculateNoiseScore(noiseBuf.toList()) else null
+        val vibScore = if (vibBuf.isNotEmpty()) ScoreCalculator.calculateVibrationScore(vibBuf.toList()) else null
+
+        val total = ScoreCalculator.calculateTotalScore(listOfNotNull(lightScore, noiseScore, vibScore)).toFloat()
+
+        _uiState.update { s ->
+            s.copy(
+                environmentFitScore = total,
+                fitHistory = if (s.isRunning) {
+                    (s.fitHistory + total).takeLast(DISPLAY_HISTORY)
+                } else {
+                    s.fitHistory
+                },
+            )
+        }
+    }
+
+    /**
+     * Starts the session timer and marks the session as running.
+     *
+     * Cancels any existing timer, sets `isRunning = true` and `isPaused = false`, then launches a job that increments `elapsedSeconds` by one every second while the session remains running.
+     */
+    fun startSession() {
+        if (!_uiState.value.isPaused) {
+            lightBuf.clear()
+            noiseBuf.clear()
+            vibBuf.clear()
+        }
+        _uiState.update { it.copy(isRunning = true, isPaused = false) }
         timerJob?.cancel()
+        timerJob = viewModelScope.launch {
+            while (true) {
+                delay(1000L)
+                if (!_uiState.value.isRunning) break
+                _uiState.update { it.copy(elapsedSeconds = it.elapsedSeconds + 1) }
+            }
+        }
     }
 
+    /**
+     * Pauses the active session.
+     *
+     * Cancels the running session timer (if any) and updates UI state to set `isRunning` to false and `isPaused` to true.
+     */
+    fun pauseSession() {
+        timerJob?.cancel()
+        _uiState.update { it.copy(isRunning = false, isPaused = true) }
+    }
+
+    /**
+     * Stops the active session and resets its running and paused state.
+     *
+     * Cancels any existing session timer and updates the UI state to set `isRunning = false`
+     * and `isPaused = false`.
+     */
     fun stopSession() {
         timerJob?.cancel()
-        _uiState.value = _uiState.value.copy(isRunning = false, isPaused = false)
+        lightBuf.clear()
+        noiseBuf.clear()
+        vibBuf.clear()
+        _uiState.update { it.copy(isRunning = false, isPaused = false) }
     }
 
+    /**
+     * Performs cleanup when the ViewModel is being destroyed.
+     *
+     * Cancels the active session timer job if present.
+     */
     override fun onCleared() {
         super.onCleared()
         timerJob?.cancel()
+        noiseJob?.cancel()
     }
 }
 
@@ -132,27 +334,50 @@ data class FeedbackUiState(
     val submitted: Boolean = false,
 )
 
-class FeedbackSessionViewModel : ViewModel() {
+class FeedbackSessionViewModel : androidx.lifecycle.ViewModel() {
     private val _uiState = MutableStateFlow(FeedbackUiState())
     val uiState: StateFlow<FeedbackUiState> = _uiState.asStateFlow()
 
+    /**
+     * Sets the user's overall subjective score in the feedback UI state.
+     *
+     * @param score The subjective score value where 1 = very dissatisfied and 5 = very satisfied.
+     */
     fun updateSubjectiveScore(score: Int) {
-        _uiState.value = _uiState.value.copy(subjectiveScore = score)
+        _uiState.update { it.copy(subjectiveScore = score) }
     }
 
+    /**
+     * Updates the response to feedback question 1 in the UI state.
+     *
+     * @param score Selected response for question 1 where 1 = very dissatisfied and 5 = very satisfied (valid range 1–5).
+     */
     fun updateQuestion1(score: Int) {
-        _uiState.value = _uiState.value.copy(question1 = score)
+        _uiState.update { it.copy(question1 = score) }
     }
 
+    /**
+     * Set the second questionnaire response in the feedback UI state.
+     *
+     * @param score The response for question 2 on a 1–5 scale (1 = very dissatisfied, 5 = very satisfied).
+     */
     fun updateQuestion2(score: Int) {
-        _uiState.value = _uiState.value.copy(question2 = score)
+        _uiState.update { it.copy(question2 = score) }
     }
 
+    /**
+     * Updates the stored response for question 3 in the feedback UI state.
+     *
+     * @param score Rating value from 1 (very dissatisfied) to 5 (very satisfied).
+     */
     fun updateQuestion3(score: Int) {
-        _uiState.value = _uiState.value.copy(question3 = score)
+        _uiState.update { it.copy(question3 = score) }
     }
 
+    /**
+     * Marks the feedback as submitted in the view model's UI state.
+     */
     fun submit() {
-        _uiState.value = _uiState.value.copy(submitted = true)
+        _uiState.update { it.copy(submitted = true) }
     }
 }

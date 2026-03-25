@@ -169,7 +169,17 @@ fun SpaceHistoryScreen(
     }
 }
 
-// 지도 영역 자리표시자 (실제 Maps 연동 전)
+/**
+ * Renders a placeholder map area that shows the number of records and up to four clickable pins.
+ *
+ * The pin for `selectedId`, if present among the shown records, is visually highlighted. Clicking a pin
+ * invokes `onPinClick` with that record's id.
+ *
+ * @param records The space records to represent as pins; at most the first four are shown.
+ * @param selectedId The id of the currently selected record, or `null` if none.
+ * @param onPinClick Callback invoked with a record id when its pin is clicked.
+ * @param modifier Modifier applied to the root composable.
+ */
 @Composable
 private fun MapViewPlaceholder(
     records: List<SpaceRecord>,
@@ -218,6 +228,15 @@ private fun MapViewPlaceholder(
     }
 }
 
+/**
+ * Displays a popup card showing detailed information for a given space record.
+ *
+ * Shows the space name, average focus score, metrics for noise, illuminance, and vibration,
+ * and session/last-visited summary. Includes a control that invokes `onDismiss` to close the popup.
+ *
+ * @param record The `SpaceRecord` whose details are rendered.
+ * @param onDismiss Callback invoked when the user dismisses the popup.
+ */
 @Composable
 private fun SpaceDetailPopup(
     record: SpaceRecord,
@@ -267,7 +286,7 @@ private fun SpaceDetailPopup(
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 MetricText("소음", "%.0f dB".format(record.avgNoise), ColorNoise)
                 MetricText("조도", "%.0f lux".format(record.avgIlluminance), ColorLight)
-                MetricText("온도", "%.0f°C".format(record.avgTemperature), ColorTemp)
+                MetricText("진동", "%.2f m/s²".format(record.avgVibration), ColorVibration)
             }
             Spacer(Modifier.height(4.dp))
             Text(
@@ -279,6 +298,13 @@ private fun SpaceDetailPopup(
     }
 }
 
+/**
+ * Displays a centered metric with a prominent value and a smaller label beneath it.
+ *
+ * @param label The metric label shown below the value (e.g., "Noise").
+ * @param value The metric value shown above the label (formatted string, e.g., "42 dB").
+ * @param color The color applied to the value text.
+ */
 @Composable
 private fun MetricText(
     label: String,
@@ -291,6 +317,15 @@ private fun MetricText(
     }
 }
 
+/**
+ * Displays a clickable card summarizing a space record for the list view.
+ *
+ * Shows the space name, an average focus score badge, session count with last-visited text,
+ * and three small metric tags for noise, illuminance, and vibration.
+ *
+ * @param record The `SpaceRecord` whose data is displayed.
+ * @param onClick Callback invoked when the card is clicked.
+ */
 @Composable
 private fun SpaceListCard(
     record: SpaceRecord,
@@ -341,7 +376,7 @@ private fun SpaceListCard(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     SmallTag("소음 %.0fdB".format(record.avgNoise), ColorNoise)
                     SmallTag("%.0flux".format(record.avgIlluminance), ColorLight)
-                    SmallTag("%.0f°C".format(record.avgTemperature), ColorTemp)
+                    SmallTag("%.2fm/s²".format(record.avgVibration), ColorVibration)
                 }
             }
         }
