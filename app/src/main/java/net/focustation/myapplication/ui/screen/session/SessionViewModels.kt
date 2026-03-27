@@ -28,8 +28,9 @@ data class EnvironmentSessionUiState(
     val environmentScore: Float = 0f, // 0~100
 )
 
-class EnvironmentSessionViewModel(app: Application) : AndroidViewModel(app) {
-
+class EnvironmentSessionViewModel(
+    app: Application,
+) : AndroidViewModel(app) {
     private val lightManager = LightSensorManager(app)
     private val noiseManager = NoiseSensorManager()
     private val vibrationManager = VibrationSensorManager(app)
@@ -78,13 +79,14 @@ class EnvironmentSessionViewModel(app: Application) : AndroidViewModel(app) {
     fun startNoiseCollection() {
         if (noiseJob != null) return
         hasNoisePerm = true
-        noiseJob = viewModelScope.launch {
-            noiseManager.getNoiseFlow().collect { db ->
-                noiseBuf.addLast(db)
-                if (noiseBuf.size > WINDOW) noiseBuf.removeFirst()
-                recalculate()
+        noiseJob =
+            viewModelScope.launch {
+                noiseManager.getNoiseFlow().collect { db ->
+                    noiseBuf.addLast(db)
+                    if (noiseBuf.size > WINDOW) noiseBuf.removeFirst()
+                    recalculate()
+                }
             }
-        }
     }
 
     /**
@@ -97,18 +99,26 @@ class EnvironmentSessionViewModel(app: Application) : AndroidViewModel(app) {
      */
     private fun recalculate() {
         val lightScore = if (lightBuf.isNotEmpty()) ScoreCalculator.calculateLightScore(lightBuf.toList()) else null
-        val noiseScore = if (hasNoisePerm && noiseBuf.isNotEmpty()) ScoreCalculator.calculateNoiseScore(noiseBuf.toList()) else null
+        val noiseScore =
+            if (hasNoisePerm &&
+                noiseBuf.isNotEmpty()
+            ) {
+                ScoreCalculator.calculateNoiseScore(noiseBuf.toList())
+            } else {
+                null
+            }
         val vibScore = if (vibBuf.isNotEmpty()) ScoreCalculator.calculateVibrationScore(vibBuf.toList()) else null
 
         val total = ScoreCalculator.calculateTotalScore(listOfNotNull(lightScore, noiseScore, vibScore)).toFloat()
 
         _uiState.update { s ->
             s.copy(
-                currentSnapshot = EnvironmentSnapshot(
-                    noiseLevel = noiseBuf.lastOrNull()?.toFloat() ?: s.currentSnapshot.noiseLevel,
-                    illuminance = lightBuf.lastOrNull() ?: s.currentSnapshot.illuminance,
-                    vibration = vibBuf.lastOrNull() ?: s.currentSnapshot.vibration,
-                ),
+                currentSnapshot =
+                    EnvironmentSnapshot(
+                        noiseLevel = noiseBuf.lastOrNull()?.toFloat() ?: s.currentSnapshot.noiseLevel,
+                        illuminance = lightBuf.lastOrNull() ?: s.currentSnapshot.illuminance,
+                        vibration = vibBuf.lastOrNull() ?: s.currentSnapshot.vibration,
+                    ),
                 noiseHistory = noiseBuf.takeLast(DISPLAY_HISTORY).map { it.toFloat() },
                 environmentScore = total,
             )
@@ -128,13 +138,14 @@ class EnvironmentSessionViewModel(app: Application) : AndroidViewModel(app) {
         }
         _uiState.update { it.copy(isRunning = true, isPaused = false) }
         timerJob?.cancel()
-        timerJob = viewModelScope.launch {
-            while (_uiState.value.elapsedSeconds < _uiState.value.totalSessionSeconds) {
-                delay(1000L)
-                if (!_uiState.value.isRunning) break
-                _uiState.update { it.copy(elapsedSeconds = it.elapsedSeconds + 1) }
+        timerJob =
+            viewModelScope.launch {
+                while (_uiState.value.elapsedSeconds < _uiState.value.totalSessionSeconds) {
+                    delay(1000L)
+                    if (!_uiState.value.isRunning) break
+                    _uiState.update { it.copy(elapsedSeconds = it.elapsedSeconds + 1) }
+                }
             }
-        }
     }
 
     /**
@@ -182,8 +193,9 @@ data class FocusSessionUiState(
     val fitHistory: List<Float> = emptyList(),
 )
 
-class FocusSessionViewModel(app: Application) : AndroidViewModel(app) {
-
+class FocusSessionViewModel(
+    app: Application,
+) : AndroidViewModel(app) {
     private val lightManager = LightSensorManager(app)
     private val noiseManager = NoiseSensorManager()
     private val vibrationManager = VibrationSensorManager(app)
@@ -231,13 +243,14 @@ class FocusSessionViewModel(app: Application) : AndroidViewModel(app) {
     fun startNoiseCollection() {
         if (noiseJob != null) return
         hasNoisePerm = true
-        noiseJob = viewModelScope.launch {
-            noiseManager.getNoiseFlow().collect { db ->
-                noiseBuf.addLast(db)
-                if (noiseBuf.size > WINDOW) noiseBuf.removeFirst()
-                recalculate()
+        noiseJob =
+            viewModelScope.launch {
+                noiseManager.getNoiseFlow().collect { db ->
+                    noiseBuf.addLast(db)
+                    if (noiseBuf.size > WINDOW) noiseBuf.removeFirst()
+                    recalculate()
+                }
             }
-        }
     }
 
     /**
@@ -249,7 +262,14 @@ class FocusSessionViewModel(app: Application) : AndroidViewModel(app) {
      */
     private fun recalculate() {
         val lightScore = if (lightBuf.isNotEmpty()) ScoreCalculator.calculateLightScore(lightBuf.toList()) else null
-        val noiseScore = if (hasNoisePerm && noiseBuf.isNotEmpty()) ScoreCalculator.calculateNoiseScore(noiseBuf.toList()) else null
+        val noiseScore =
+            if (hasNoisePerm &&
+                noiseBuf.isNotEmpty()
+            ) {
+                ScoreCalculator.calculateNoiseScore(noiseBuf.toList())
+            } else {
+                null
+            }
         val vibScore = if (vibBuf.isNotEmpty()) ScoreCalculator.calculateVibrationScore(vibBuf.toList()) else null
 
         val total = ScoreCalculator.calculateTotalScore(listOfNotNull(lightScore, noiseScore, vibScore)).toFloat()
@@ -257,11 +277,12 @@ class FocusSessionViewModel(app: Application) : AndroidViewModel(app) {
         _uiState.update { s ->
             s.copy(
                 environmentFitScore = total,
-                fitHistory = if (s.isRunning) {
-                    (s.fitHistory + total).takeLast(DISPLAY_HISTORY)
-                } else {
-                    s.fitHistory
-                },
+                fitHistory =
+                    if (s.isRunning) {
+                        (s.fitHistory + total).takeLast(DISPLAY_HISTORY)
+                    } else {
+                        s.fitHistory
+                    },
             )
         }
     }
@@ -279,13 +300,14 @@ class FocusSessionViewModel(app: Application) : AndroidViewModel(app) {
         }
         _uiState.update { it.copy(isRunning = true, isPaused = false) }
         timerJob?.cancel()
-        timerJob = viewModelScope.launch {
-            while (true) {
-                delay(1000L)
-                if (!_uiState.value.isRunning) break
-                _uiState.update { it.copy(elapsedSeconds = it.elapsedSeconds + 1) }
+        timerJob =
+            viewModelScope.launch {
+                while (true) {
+                    delay(1000L)
+                    if (!_uiState.value.isRunning) break
+                    _uiState.update { it.copy(elapsedSeconds = it.elapsedSeconds + 1) }
+                }
             }
-        }
     }
 
     /**

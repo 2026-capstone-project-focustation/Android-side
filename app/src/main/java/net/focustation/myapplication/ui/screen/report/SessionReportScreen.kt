@@ -31,26 +31,6 @@ import net.focustation.myapplication.ui.theme.ColorVibration
 import net.focustation.myapplication.ui.theme.FocustationTheme
 import net.focustation.myapplication.ui.theme.Primary40
 
-/**
- * Renders the session report screen with a header summary, a focus timeline chart, environment metric details, and action buttons.
- *
- * The UI displays total focus time and an environment suitability score, a time-series focus chart with labels, detailed rows for noise, illuminance, and vibration (each with a progress indicator), a conditional "save place" button shown only when the report originates from an active session, and action buttons for sharing and retrying the measurement.
- *
- * @param onBack Callback invoked when the top app bar back navigation is pressed.
- * @param onRetry Callback invoked when the user requests to re-measure (the "재측정" button).
- * @param viewModel The [SessionReportViewModel] providing UI state and actions; defaults to the composable-scoped ViewModel.
- */
-/**
- * Displays the session report UI: header summary, focus timeline chart, environment metrics, and action controls.
- *
- * Renders a scaffold with a top app bar titled "세션 리포트", a summary banner (total focus minutes and environment score),
- * a focus timeline chart with time labels, environment detail rows for noise/illuminance/vibration, an optional place-save button
- * shown only immediately after a session, and share/retry action buttons.
- *
- * @param onBack Called when the top app bar navigation icon is pressed.
- * @param onRetry Called when the "재측정" (retry) action is pressed.
- * @param viewModel Provides the UI state (`uiState`) used to populate all displayed values and handles place-saving. 
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SessionReportScreen(
