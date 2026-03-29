@@ -52,6 +52,7 @@ fun SpaceHistoryScreen(
     viewModel: SpaceHistoryViewModel = viewModel(),
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val isNaverMapMcpIdConfigured = remember(context) { context.hasNaverMapMcpIdConfigured() }
     val uiState by viewModel.uiState.collectAsState()
     var hasLocationPermission by remember { mutableStateOf(context.hasLocationPermission()) }
@@ -61,6 +62,19 @@ fun SpaceHistoryScreen(
         rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissionResult ->
             hasLocationPermission = permissionResult.any { it.value }
         }
+
+    // 시스템 설정에서 권한 변경 시 UI 새로고침을 위한 Lifecycle 옵저버
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hasLocationPermission = context.hasLocationPermission()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     LaunchedEffect(uiState.isMapView, hasLocationPermission, requestedLocationPermission) {
         if (uiState.isMapView && !hasLocationPermission && !requestedLocationPermission) {
@@ -190,14 +204,15 @@ fun SpaceHistoryScreen(
                             }
                         }
                     }
-                }
 
-                // 선택된 장소 팝업 카드
-                selectedRecord?.let {
-                    SpaceDetailPopup(
-                        record = it,
-                        onDismiss = { viewModel.selectSpace(null) },
-                    )
+                    // 선택된 장소 팝업 카드 - 오버레이로 배치
+                    selectedRecord?.let {
+                        SpaceDetailPopup(
+                            record = it,
+                            onDismiss = { viewModel.selectSpace(null) },
+                            modifier = Modifier.align(Alignment.BottomCenter),
+                        )
+                    }
                 }
             } else {
                 // 정렬 옵션
@@ -417,10 +432,11 @@ private fun NaverMapSection(
 private fun SpaceDetailPopup(
     record: SpaceRecord,
     onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Card(
         modifier =
-            Modifier
+            modifier
                 .fillMaxWidth()
                 .padding(16.dp),
         shape = RoundedCornerShape(20.dp),

@@ -76,7 +76,7 @@ dependencies {
     implementation(libs.maps.compose)
     implementation(libs.play.services.maps)
     implementation("com.google.android.gms:play-services-location:21.1.0")
-    implementation("com.naver.maps:map-sdk:3.23.1")
+    implementation(libs.naver.maps)
     implementation(libs.playServicesAuth)
     implementation(platform(libs.firebaseBom))
     implementation(libs.firebaseAuth)
