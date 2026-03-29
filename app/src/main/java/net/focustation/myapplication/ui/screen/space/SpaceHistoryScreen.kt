@@ -1,5 +1,12 @@
 package net.focustation.myapplication.ui.screen.space
 
+import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -12,15 +19,29 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.naver.maps.geometry.LatLng
+import com.naver.maps.map.CameraUpdate
+import com.naver.maps.map.LocationTrackingMode
+import com.naver.maps.map.MapView
+import com.naver.maps.map.NaverMap
+import com.naver.maps.map.overlay.Marker
+import com.naver.maps.map.util.FusedLocationSource
 import net.focustation.myapplication.data.model.SpaceRecord
 import net.focustation.myapplication.ui.theme.*
 
@@ -30,7 +51,37 @@ fun SpaceHistoryScreen(
     onBack: () -> Unit,
     viewModel: SpaceHistoryViewModel = viewModel(),
 ) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val isNaverMapMcpIdConfigured = remember(context) { context.hasNaverMapMcpIdConfigured() }
     val uiState by viewModel.uiState.collectAsState()
+    var hasLocationPermission by remember { mutableStateOf(context.hasLocationPermission()) }
+    var requestedLocationPermission by rememberSaveable { mutableStateOf(false) }
+
+    val locationPermissionLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissionResult ->
+            hasLocationPermission = permissionResult.any { it.value }
+        }
+
+    // 시스템 설정에서 권한 변경 시 UI 새로고침을 위한 Lifecycle 옵저버
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hasLocationPermission = context.hasLocationPermission()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    LaunchedEffect(uiState.isMapView, hasLocationPermission, requestedLocationPermission) {
+        if (uiState.isMapView && !hasLocationPermission && !requestedLocationPermission) {
+            requestedLocationPermission = true
+            locationPermissionLauncher.launch(LOCATION_PERMISSIONS)
+        }
+    }
 
     val sortedRecords =
         remember(uiState.spaceRecords, uiState.sortOption) {
@@ -38,6 +89,12 @@ fun SpaceHistoryScreen(
                 SpaceSortOption.SCORE -> uiState.spaceRecords.sortedByDescending { it.avgFocusScore }
                 SpaceSortOption.PLACE -> uiState.spaceRecords.sortedBy { it.name }
                 SpaceSortOption.DATE -> uiState.spaceRecords
+            }
+        }
+    val selectedRecord =
+        remember(uiState.selectedSpaceId, uiState.spaceRecords) {
+            uiState.selectedSpaceId?.let { selectedId ->
+                uiState.spaceRecords.find { it.id == selectedId }
             }
         }
 
@@ -97,24 +154,63 @@ fun SpaceHistoryScreen(
             }
 
             if (uiState.isMapView) {
-                // 지도 뷰
-                MapViewPlaceholder(
-                    records = sortedRecords,
-                    selectedId = uiState.selectedSpaceId,
-                    onPinClick = { viewModel.selectSpace(it) },
+                Box(
                     modifier =
                         Modifier
                             .fillMaxWidth()
                             .weight(1f),
-                )
+                ) {
+                    NaverMapSection(
+                        records = sortedRecords,
+                        selectedId = uiState.selectedSpaceId,
+                        hasLocationPermission = hasLocationPermission,
+                        onPinClick = { viewModel.selectSpace(it) },
+                        modifier = Modifier.fillMaxSize(),
+                    )
 
-                // 선택된 장소 팝업 카드
-                uiState.selectedSpaceId?.let { id ->
-                    val record = uiState.spaceRecords.find { it.id == id }
-                    record?.let {
+                    Column(
+                        modifier =
+                            Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        if (!isNaverMapMcpIdConfigured) {
+                            ElevatedCard(
+                                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                            ) {
+                                Text(
+                                    text = "NAVER_MAP_MCP_ID가 비어 있어요. local.properties 또는 gradle.properties를 확인해주세요.",
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                )
+                            }
+                        }
+
+                        if (!hasLocationPermission) {
+                            ElevatedCard(
+                                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    Text("내 위치 추적을 위해 위치 권한이 필요해요.")
+                                    TextButton(onClick = { locationPermissionLauncher.launch(LOCATION_PERMISSIONS) }) {
+                                        Text("권한 허용")
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 선택된 장소 팝업 카드 - 오버레이로 배치
+                    selectedRecord?.let {
                         SpaceDetailPopup(
                             record = it,
                             onDismiss = { viewModel.selectSpace(null) },
+                            modifier = Modifier.align(Alignment.BottomCenter),
                         )
                     }
                 }
@@ -138,14 +234,7 @@ fun SpaceHistoryScreen(
                             selected = uiState.sortOption == opt,
                             onClick = { viewModel.setSortOption(opt) },
                             label = {
-                                Text(
-                                    when (opt) {
-                                        SpaceSortOption.DATE -> "날짜"
-                                        SpaceSortOption.PLACE -> "장소"
-                                        SpaceSortOption.SCORE -> "점수"
-                                    },
-                                    fontSize = 12.sp,
-                                )
+                                Text(opt.toDisplayLabel(), fontSize = 12.sp)
                             },
                         )
                     }
@@ -169,62 +258,164 @@ fun SpaceHistoryScreen(
     }
 }
 
-/**
- * Renders a placeholder map area that shows the number of records and up to four clickable pins.
- *
- * The pin for `selectedId`, if present among the shown records, is visually highlighted. Clicking a pin
- * invokes `onPinClick` with that record's id.
- *
- * @param records The space records to represent as pins; at most the first four are shown.
- * @param selectedId The id of the currently selected record, or `null` if none.
- * @param onPinClick Callback invoked with a record id when its pin is clicked.
- * @param modifier Modifier applied to the root composable.
- */
 @Composable
-private fun MapViewPlaceholder(
+private fun NaverMapSection(
     records: List<SpaceRecord>,
     selectedId: String?,
-    onPinClick: (String) -> Unit,
+    hasLocationPermission: Boolean,
+    onPinClick: (String?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Box(
-        modifier = modifier.background(Color(0xFFD8E8D0)),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("🗺️", fontSize = 48.sp)
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = "지도 영역",
-                style = MaterialTheme.typography.titleMedium,
-                color = Color(0xFF4A6741),
-            )
-            Text(
-                text = "${records.size}개의 장소 핀",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFF4A6741).copy(alpha = 0.7f),
-            )
-            Spacer(Modifier.height(20.dp))
-            // 핀 버튼들
-            records.take(4).forEach { record ->
-                Box(
-                    modifier =
-                        Modifier
-                            .padding(vertical = 4.dp)
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(
-                                if (record.id == selectedId) Primary40 else Color.White.copy(alpha = 0.9f),
-                            ).clickable { onPinClick(record.id) }
-                            .padding(horizontal = 14.dp, vertical = 8.dp),
-                ) {
-                    Text(
-                        text = "📍 ${record.name}  ${record.avgFocusScore}점",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (record.id == selectedId) Color.White else Color(0xFF333333),
-                    )
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val activity = remember(context) { context.findActivity() }
+    val onPinClickState by rememberUpdatedState(onPinClick)
+    val latestRecords by rememberUpdatedState(records)
+
+    val mapView =
+        remember {
+            try {
+                android.util.Log.d("NaverMap", "Creating MapView...")
+                MapView(context)
+            } catch (e: Exception) {
+                android.util.Log.e("NaverMap", "Failed to create MapView", e)
+                null
+            }
+        }
+
+    LaunchedEffect(mapView) {
+        val createdMapView = mapView ?: return@LaunchedEffect
+        try {
+            createdMapView.onCreate(null)
+            android.util.Log.d("NaverMap", "MapView onCreate called successfully")
+        } catch (e: Exception) {
+            android.util.Log.e("NaverMap", "MapView onCreate failed", e)
+        }
+    }
+
+    val locationSource = remember(activity) { activity?.let { FusedLocationSource(it, LOCATION_PERMISSION_REQUEST_CODE) } }
+    var naverMap by remember { mutableStateOf<NaverMap?>(null) }
+    val renderedMarkers = remember { mutableStateListOf<Marker>() }
+    var movedToInitialCamera by remember { mutableStateOf(false) }
+    var mapInitErrorMessage by remember { mutableStateOf<String?>(null) }
+
+    DisposableEffect(lifecycleOwner, mapView) {
+        if (mapView == null) {
+            return@DisposableEffect onDispose {}
+        }
+        val observer =
+            LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_START -> runCatching { mapView.onStart() }.onFailure { android.util.Log.e("NaverMap", "onStart error", it) }
+                    Lifecycle.Event.ON_RESUME -> runCatching { mapView.onResume() }.onFailure { android.util.Log.e("NaverMap", "onResume error", it) }
+                    Lifecycle.Event.ON_PAUSE -> runCatching { mapView.onPause() }.onFailure { android.util.Log.e("NaverMap", "onPause error", it) }
+                    Lifecycle.Event.ON_STOP -> runCatching { mapView.onStop() }.onFailure { android.util.Log.e("NaverMap", "onStop error", it) }
+                    else -> Unit
+                }
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            runCatching { mapView.onDestroy() }.onFailure { android.util.Log.e("NaverMap", "onDestroy error", it) }
+            renderedMarkers.forEach { it.map = null }
+            renderedMarkers.clear()
+        }
+    }
+
+    LaunchedEffect(mapView) {
+        if (mapView == null) return@LaunchedEffect
+        mapView.getMapAsync { map ->
+            try {
+                naverMap = map
+                movedToInitialCamera = false
+                map.uiSettings.isLocationButtonEnabled = true
+                map.setOnMapClickListener { _, _ -> onPinClickState(null) }
+                latestRecords.firstOrNull()?.let { first ->
+                    map.moveCamera(CameraUpdate.scrollTo(LatLng(first.latitude, first.longitude)))
+                    movedToInitialCamera = true
+                }
+                android.util.Log.d("NaverMap", "Map initialized successfully")
+                mapInitErrorMessage = null
+            } catch (e: Exception) {
+                android.util.Log.e("NaverMap", "Failed to initialize map", e)
+                mapInitErrorMessage = "지도 초기화 중 오류: ${e.message}"
+            }
+        }
+    }
+
+    LaunchedEffect(naverMap, records, selectedId) {
+        val map = naverMap ?: return@LaunchedEffect
+        if (!movedToInitialCamera && selectedId == null) {
+            records.firstOrNull()?.let { first ->
+                map.moveCamera(CameraUpdate.scrollTo(LatLng(first.latitude, first.longitude)))
+                movedToInitialCamera = true
+            }
+        }
+    }
+
+    LaunchedEffect(naverMap, records) {
+        val naverMapInstance = naverMap ?: return@LaunchedEffect
+        renderedMarkers.forEach { it.map = null }
+        renderedMarkers.clear()
+
+        records.forEach { record ->
+            val marker =
+                Marker().apply {
+                    position = LatLng(record.latitude, record.longitude)
+                    captionText = record.name
+                    map = naverMapInstance
+                    setOnClickListener {
+                        onPinClickState(record.id)
+                        true
+                    }
+                }
+            renderedMarkers.add(marker)
+        }
+    }
+
+    LaunchedEffect(naverMap, records, selectedId) {
+        val naverMapInstance = naverMap ?: return@LaunchedEffect
+        records.find { it.id == selectedId }?.let { selected ->
+            naverMapInstance.moveCamera(CameraUpdate.scrollTo(LatLng(selected.latitude, selected.longitude)))
+        }
+    }
+
+    LaunchedEffect(naverMap, hasLocationPermission, locationSource) {
+        val map = naverMap ?: return@LaunchedEffect
+        runCatching {
+            if (locationSource != null && hasLocationPermission) {
+                map.locationSource = locationSource
+            }
+        }
+        runCatching {
+            map.locationTrackingMode =
+                if (hasLocationPermission) {
+                    LocationTrackingMode.Follow
+                } else {
+                    LocationTrackingMode.None
+                }
+        }
+    }
+
+    if (mapView == null) {
+        Box(
+            modifier = modifier.background(Color(0xFFFFCDD2)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("지도 초기화 실패", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error)
+                if (mapInitErrorMessage != null) {
+                    Text(mapInitErrorMessage!!, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                } else {
+                    Text("네이버 지도 SDK를 초기화할 수 없습니다.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                 }
             }
         }
+    } else {
+        AndroidView(
+            modifier = modifier,
+            factory = { mapView },
+        )
     }
 }
 
@@ -241,10 +432,11 @@ private fun MapViewPlaceholder(
 private fun SpaceDetailPopup(
     record: SpaceRecord,
     onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Card(
         modifier =
-            Modifier
+            modifier
                 .fillMaxWidth()
                 .padding(16.dp),
         shape = RoundedCornerShape(20.dp),
@@ -290,7 +482,7 @@ private fun SpaceDetailPopup(
             }
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "세션 ${record.sessionCount}회 · 마지막 방문: ${record.lastVisited}",
+                text = record.toSessionSummary(),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -368,15 +560,15 @@ private fun SpaceListCard(
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    text = "세션 ${record.sessionCount}회 · 마지막 방문: ${record.lastVisited}",
+                    text = record.toSessionSummary(),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(4.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SmallTag("소음 %.0fdB".format(record.avgNoise), ColorNoise)
-                    SmallTag("%.0flux".format(record.avgIlluminance), ColorLight)
-                    SmallTag("%.2fm/s²".format(record.avgVibration), ColorVibration)
+                    SmallTag(record.toNoiseTag(), ColorNoise)
+                    SmallTag(record.toIlluminanceTag(), ColorLight)
+                    SmallTag(record.toVibrationTag(), ColorVibration)
                 }
             }
         }
@@ -398,6 +590,49 @@ private fun SmallTag(
         Text(text = text, style = MaterialTheme.typography.labelSmall, color = color)
     }
 }
+
+private const val LOCATION_PERMISSION_REQUEST_CODE = 1001
+private const val NAVER_MAP_MCP_ID_META_KEY = "com.naver.maps.map.MCP_ID"
+
+private val LOCATION_PERMISSIONS =
+    arrayOf(
+        Manifest.permission.ACCESS_FINE_LOCATION,
+        Manifest.permission.ACCESS_COARSE_LOCATION,
+    )
+
+private fun Context.hasLocationPermission(): Boolean =
+    LOCATION_PERMISSIONS.any {
+        ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+    }
+
+private tailrec fun Context.findActivity(): Activity? =
+    when (this) {
+        is Activity -> this
+        is ContextWrapper -> baseContext.findActivity()
+        else -> null
+    }
+
+private fun Context.hasNaverMapMcpIdConfigured(): Boolean =
+    runCatching {
+        val appInfo = packageManager.getApplicationInfo(packageName, PackageManager.GET_META_DATA)
+        val clientId = appInfo.metaData?.getString(NAVER_MAP_MCP_ID_META_KEY).orEmpty().trim()
+        clientId.isNotEmpty() && !clientId.startsWith("\${")
+    }.getOrDefault(false)
+
+private fun SpaceSortOption.toDisplayLabel(): String =
+    when (this) {
+        SpaceSortOption.DATE -> "날짜"
+        SpaceSortOption.PLACE -> "장소"
+        SpaceSortOption.SCORE -> "점수"
+    }
+
+private fun SpaceRecord.toSessionSummary(): String = "세션 ${sessionCount}회 · 마지막 방문: ${lastVisited}"
+
+private fun SpaceRecord.toNoiseTag(): String = "소음 %.0fdB".format(avgNoise)
+
+private fun SpaceRecord.toIlluminanceTag(): String = "%.0flux".format(avgIlluminance)
+
+private fun SpaceRecord.toVibrationTag(): String = "%.2fm/s²".format(avgVibration)
 
 @Preview(showBackground = true)
 @Composable
