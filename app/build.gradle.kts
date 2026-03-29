@@ -16,6 +16,14 @@ android {
                 localPropertiesFile.inputStream().use { load(it) }
             }
         }
+    val naverMapMcpId =
+        ((project.findProperty("NAVER_MAP_MCP_ID") as String?)
+            ?: localProperties.getProperty("NAVER_MAP_MCP_ID", ""))
+            .trim()
+    val escapedNaverMapMcpId =
+        naverMapMcpId
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
 
     namespace = "net.focustation.myapplication"
     compileSdk = 36
@@ -26,10 +34,8 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
-        manifestPlaceholders["NAVER_MAP_CLIENT_ID"] = (
-            project.findProperty("NAVER_MAP_CLIENT_ID") as String?
-                ?: localProperties.getProperty("NAVER_MAP_CLIENT_ID", "")
-        )
+        manifestPlaceholders["NAVER_MAP_MCP_ID"] = naverMapMcpId
+        buildConfigField("String", "NAVER_MAP_MCP_ID", "\"$escapedNaverMapMcpId\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -52,6 +58,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

@@ -22,8 +22,8 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Focustation">
         <meta-data
-            android:name="com.naver.maps.map.CLIENT_ID"
-            android:value="${NAVER_MAP_CLIENT_ID}" />
+            android:name="com.naver.maps.map.MCP_ID"
+            android:value="${NAVER_MAP_MCP_ID}" />
 
         <activity
             android:name=".MainActivity"

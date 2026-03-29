@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.naver.maps.geometry.LatLng
 import com.naver.maps.map.CameraUpdate
@@ -52,7 +53,7 @@ fun SpaceHistoryScreen(
     viewModel: SpaceHistoryViewModel = viewModel(),
 ) {
     val context = LocalContext.current
-    val isNaverMapClientIdConfigured = remember(context) { context.hasNaverMapClientIdConfigured() }
+    val isNaverMapMcpIdConfigured = remember(context) { context.hasNaverMapMcpIdConfigured() }
     val uiState by viewModel.uiState.collectAsState()
     var hasLocationPermission by remember { mutableStateOf(context.hasLocationPermission()) }
     var requestedLocationPermission by rememberSaveable { mutableStateOf(false) }
@@ -155,12 +156,12 @@ fun SpaceHistoryScreen(
                                 .padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        if (!isNaverMapClientIdConfigured) {
+                        if (!isNaverMapMcpIdConfigured) {
                             ElevatedCard(
                                 colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
                             ) {
                                 Text(
-                                    text = "NAVER_MAP_CLIENT_ID가 비어 있어요. local.properties 또는 gradle.properties를 확인해주세요.",
+                                    text = "NAVER_MAP_MCP_ID가 비어 있어요. local.properties 또는 gradle.properties를 확인해주세요.",
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                                     color = MaterialTheme.colorScheme.onErrorContainer,
                                 )
@@ -256,7 +257,7 @@ private fun NaverMapSection(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     val activity = remember(context) { context.findActivity() }
 
     // 네이버 지도 SDK 지연 초기화 (처음 지도 화면 진입 시)
@@ -264,7 +265,7 @@ private fun NaverMapSection(
         try {
             android.util.Log.d("NaverMap", "=== 네이버 지도 초기화 시작 ===")
             android.util.Log.d("NaverMap", "Package: ${context.packageName}")
-            android.util.Log.d("NaverMap", "META_DATA_KEY: $NAVER_MAP_CLIENT_ID_META_KEY")
+            android.util.Log.d("NaverMap", "META_DATA_KEY: $NAVER_MAP_MCP_ID_META_KEY")
 
             // 메타데이터 확인
             val appInfo = context.packageManager.getApplicationInfo(
@@ -285,7 +286,7 @@ private fun NaverMapSection(
                     }
                 }
 
-                val clientId = metaData.getString(NAVER_MAP_CLIENT_ID_META_KEY)
+                val clientId = metaData.getString(NAVER_MAP_MCP_ID_META_KEY)
                 if (clientId != null && clientId.isNotEmpty()) {
                     android.util.Log.d("NaverMap", "✓ CLIENT_ID found: $clientId")
                 } else {
@@ -606,7 +607,7 @@ private fun SmallTag(
 }
 
 private const val LOCATION_PERMISSION_REQUEST_CODE = 1001
-private const val NAVER_MAP_CLIENT_ID_META_KEY = "com.naver.maps.map.CLIENT_ID"
+private const val NAVER_MAP_MCP_ID_META_KEY = "com.naver.maps.map.MCP_ID"
 
 private val LOCATION_PERMISSIONS =
     arrayOf(
@@ -626,10 +627,10 @@ private tailrec fun Context.findActivity(): Activity? =
         else -> null
     }
 
-private fun Context.hasNaverMapClientIdConfigured(): Boolean =
+private fun Context.hasNaverMapMcpIdConfigured(): Boolean =
     runCatching {
         val appInfo = packageManager.getApplicationInfo(packageName, PackageManager.GET_META_DATA)
-        val clientId = appInfo.metaData?.getString(NAVER_MAP_CLIENT_ID_META_KEY).orEmpty().trim()
+        val clientId = appInfo.metaData?.getString(NAVER_MAP_MCP_ID_META_KEY).orEmpty().trim()
         clientId.isNotEmpty() && !clientId.startsWith("\${")
     }.getOrDefault(false)
 
