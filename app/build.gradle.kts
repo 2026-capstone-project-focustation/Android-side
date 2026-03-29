@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -7,6 +9,14 @@ plugins {
 }
 
 android {
+    val localProperties =
+        Properties().apply {
+            val localPropertiesFile = rootProject.file("local.properties")
+            if (localPropertiesFile.exists()) {
+                localPropertiesFile.inputStream().use { load(it) }
+            }
+        }
+
     namespace = "net.focustation.myapplication"
     compileSdk = 36
 
@@ -16,6 +26,10 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
+        manifestPlaceholders["NAVER_MAP_CLIENT_ID"] = (
+            project.findProperty("NAVER_MAP_CLIENT_ID") as String?
+                ?: localProperties.getProperty("NAVER_MAP_CLIENT_ID", "")
+        )
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -54,9 +68,12 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.maps.compose)
     implementation(libs.play.services.maps)
+    implementation("com.google.android.gms:play-services-location:21.1.0")
+    implementation("com.naver.maps:map-sdk:3.23.1")
     implementation(libs.playServicesAuth)
     implementation(platform(libs.firebaseBom))
     implementation(libs.firebaseAuth)
+    implementation("androidx.appcompat:appcompat:1.6.1")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
