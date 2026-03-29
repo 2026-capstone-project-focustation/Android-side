@@ -25,7 +25,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.viewinterop.AndroidView
@@ -257,52 +256,8 @@ private fun NaverMapSection(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val activity = remember(context) { context.findActivity() }
-
-    // 네이버 지도 SDK 지연 초기화 (처음 지도 화면 진입 시)
-    LaunchedEffect(Unit) {
-        try {
-            android.util.Log.d("NaverMap", "=== 네이버 지도 초기화 시작 ===")
-            android.util.Log.d("NaverMap", "Package: ${context.packageName}")
-            android.util.Log.d("NaverMap", "META_DATA_KEY: $NAVER_MAP_MCP_ID_META_KEY")
-
-            // 메타데이터 확인
-            val appInfo = context.packageManager.getApplicationInfo(
-                context.packageName,
-                android.content.pm.PackageManager.GET_META_DATA
-            )
-            android.util.Log.d("NaverMap", "ApplicationInfo obtained")
-
-            val metaData = appInfo.metaData
-            if (metaData != null) {
-                android.util.Log.d("NaverMap", "MetaData found, size: ${metaData.size()}")
-
-                // 모든 메타데이터 확인
-                val keys = metaData.keySet()
-                for (key in keys) {
-                    if (key.contains("naver", ignoreCase = true) || key.contains("map", ignoreCase = true)) {
-                        android.util.Log.d("NaverMap", "  MetaData[$key] = ${metaData.get(key)}")
-                    }
-                }
-
-                val clientId = metaData.getString(NAVER_MAP_MCP_ID_META_KEY)
-                if (clientId != null && clientId.isNotEmpty()) {
-                    android.util.Log.d("NaverMap", "✓ CLIENT_ID found: $clientId")
-                } else {
-                    android.util.Log.e("NaverMap", "✗ CLIENT_ID is null or empty!")
-                }
-            } else {
-                android.util.Log.e("NaverMap", "✗ MetaData is null!")
-            }
-
-            android.util.Log.d("NaverMap", "Calling NaverMapSdk.getInstance(context)...")
-            com.naver.maps.map.NaverMapSdk.getInstance(context)
-            android.util.Log.d("NaverMap", "✓ NaverMapSdk initialized")
-        } catch (e: Exception) {
-            android.util.Log.e("NaverMap", "✗ NaverMapSdk init failed: ${e.message}", e)
-        }
-    }
 
     val mapView =
         remember {
@@ -430,7 +385,7 @@ private fun NaverMapSection(
     } else {
         AndroidView(
             modifier = modifier,
-            factory = { mapView!! },
+            factory = { mapView },
         )
     }
 }
