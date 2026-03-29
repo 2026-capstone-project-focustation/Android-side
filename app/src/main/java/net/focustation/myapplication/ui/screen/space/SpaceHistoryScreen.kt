@@ -77,6 +77,12 @@ fun SpaceHistoryScreen(
                 SpaceSortOption.DATE -> uiState.spaceRecords
             }
         }
+    val selectedRecord =
+        remember(uiState.selectedSpaceId, uiState.spaceRecords) {
+            uiState.selectedSpaceId?.let { selectedId ->
+                uiState.spaceRecords.find { it.id == selectedId }
+            }
+        }
 
     Scaffold(
         topBar = {
@@ -187,14 +193,11 @@ fun SpaceHistoryScreen(
                 }
 
                 // 선택된 장소 팝업 카드
-                uiState.selectedSpaceId?.let { id ->
-                    val record = uiState.spaceRecords.find { it.id == id }
-                    record?.let {
-                        SpaceDetailPopup(
-                            record = it,
-                            onDismiss = { viewModel.selectSpace(null) },
-                        )
-                    }
+                selectedRecord?.let {
+                    SpaceDetailPopup(
+                        record = it,
+                        onDismiss = { viewModel.selectSpace(null) },
+                    )
                 }
             } else {
                 // 정렬 옵션
@@ -216,14 +219,7 @@ fun SpaceHistoryScreen(
                             selected = uiState.sortOption == opt,
                             onClick = { viewModel.setSortOption(opt) },
                             label = {
-                                Text(
-                                    when (opt) {
-                                        SpaceSortOption.DATE -> "날짜"
-                                        SpaceSortOption.PLACE -> "장소"
-                                        SpaceSortOption.SCORE -> "점수"
-                                    },
-                                    fontSize = 12.sp,
-                                )
+                                Text(opt.toDisplayLabel(), fontSize = 12.sp)
                             },
                         )
                     }
@@ -258,6 +254,8 @@ private fun NaverMapSection(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val activity = remember(context) { context.findActivity() }
+    val onPinClickState by rememberUpdatedState(onPinClick)
+    val latestRecords by rememberUpdatedState(records)
 
     val mapView =
         remember {
@@ -271,19 +269,19 @@ private fun NaverMapSection(
         }
 
     LaunchedEffect(mapView) {
-        if (mapView != null) {
-            try {
-                mapView.onCreate(null)
-                android.util.Log.d("NaverMap", "MapView onCreate called successfully")
-            } catch (e: Exception) {
-                android.util.Log.e("NaverMap", "MapView onCreate failed", e)
-            }
+        val createdMapView = mapView ?: return@LaunchedEffect
+        try {
+            createdMapView.onCreate(null)
+            android.util.Log.d("NaverMap", "MapView onCreate called successfully")
+        } catch (e: Exception) {
+            android.util.Log.e("NaverMap", "MapView onCreate failed", e)
         }
     }
 
     val locationSource = remember(activity) { activity?.let { FusedLocationSource(it, LOCATION_PERMISSION_REQUEST_CODE) } }
     var naverMap by remember { mutableStateOf<NaverMap?>(null) }
     val renderedMarkers = remember { mutableStateListOf<Marker>() }
+    var movedToInitialCamera by remember { mutableStateOf(false) }
     var mapInitErrorMessage by remember { mutableStateOf<String?>(null) }
 
     DisposableEffect(lifecycleOwner, mapView) {
@@ -297,26 +295,29 @@ private fun NaverMapSection(
                     Lifecycle.Event.ON_RESUME -> runCatching { mapView.onResume() }.onFailure { android.util.Log.e("NaverMap", "onResume error", it) }
                     Lifecycle.Event.ON_PAUSE -> runCatching { mapView.onPause() }.onFailure { android.util.Log.e("NaverMap", "onPause error", it) }
                     Lifecycle.Event.ON_STOP -> runCatching { mapView.onStop() }.onFailure { android.util.Log.e("NaverMap", "onStop error", it) }
-                    Lifecycle.Event.ON_DESTROY -> runCatching { mapView.onDestroy() }.onFailure { android.util.Log.e("NaverMap", "onDestroy error", it) }
                     else -> Unit
                 }
             }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-            runCatching { mapView.onDestroy() }
+            runCatching { mapView.onDestroy() }.onFailure { android.util.Log.e("NaverMap", "onDestroy error", it) }
+            renderedMarkers.forEach { it.map = null }
+            renderedMarkers.clear()
         }
     }
 
-    LaunchedEffect(mapView, records) {
+    LaunchedEffect(mapView) {
         if (mapView == null) return@LaunchedEffect
         mapView.getMapAsync { map ->
             try {
                 naverMap = map
+                movedToInitialCamera = false
                 map.uiSettings.isLocationButtonEnabled = true
-                map.setOnMapClickListener { _, _ -> onPinClick(null) }
-                records.firstOrNull()?.let { first ->
+                map.setOnMapClickListener { _, _ -> onPinClickState(null) }
+                latestRecords.firstOrNull()?.let { first ->
                     map.moveCamera(CameraUpdate.scrollTo(LatLng(first.latitude, first.longitude)))
+                    movedToInitialCamera = true
                 }
                 android.util.Log.d("NaverMap", "Map initialized successfully")
                 mapInitErrorMessage = null
@@ -328,6 +329,16 @@ private fun NaverMapSection(
     }
 
     LaunchedEffect(naverMap, records, selectedId) {
+        val map = naverMap ?: return@LaunchedEffect
+        if (!movedToInitialCamera && selectedId == null) {
+            records.firstOrNull()?.let { first ->
+                map.moveCamera(CameraUpdate.scrollTo(LatLng(first.latitude, first.longitude)))
+                movedToInitialCamera = true
+            }
+        }
+    }
+
+    LaunchedEffect(naverMap, records) {
         val naverMapInstance = naverMap ?: return@LaunchedEffect
         renderedMarkers.forEach { it.map = null }
         renderedMarkers.clear()
@@ -339,13 +350,16 @@ private fun NaverMapSection(
                     captionText = record.name
                     map = naverMapInstance
                     setOnClickListener {
-                        onPinClick(record.id)
+                        onPinClickState(record.id)
                         true
                     }
                 }
             renderedMarkers.add(marker)
         }
+    }
 
+    LaunchedEffect(naverMap, records, selectedId) {
+        val naverMapInstance = naverMap ?: return@LaunchedEffect
         records.find { it.id == selectedId }?.let { selected ->
             naverMapInstance.moveCamera(CameraUpdate.scrollTo(LatLng(selected.latitude, selected.longitude)))
         }
@@ -452,7 +466,7 @@ private fun SpaceDetailPopup(
             }
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "세션 ${record.sessionCount}회 · 마지막 방문: ${record.lastVisited}",
+                text = record.toSessionSummary(),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -530,15 +544,15 @@ private fun SpaceListCard(
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    text = "세션 ${record.sessionCount}회 · 마지막 방문: ${record.lastVisited}",
+                    text = record.toSessionSummary(),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(4.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SmallTag("소음 %.0fdB".format(record.avgNoise), ColorNoise)
-                    SmallTag("%.0flux".format(record.avgIlluminance), ColorLight)
-                    SmallTag("%.2fm/s²".format(record.avgVibration), ColorVibration)
+                    SmallTag(record.toNoiseTag(), ColorNoise)
+                    SmallTag(record.toIlluminanceTag(), ColorLight)
+                    SmallTag(record.toVibrationTag(), ColorVibration)
                 }
             }
         }
@@ -588,6 +602,21 @@ private fun Context.hasNaverMapMcpIdConfigured(): Boolean =
         val clientId = appInfo.metaData?.getString(NAVER_MAP_MCP_ID_META_KEY).orEmpty().trim()
         clientId.isNotEmpty() && !clientId.startsWith("\${")
     }.getOrDefault(false)
+
+private fun SpaceSortOption.toDisplayLabel(): String =
+    when (this) {
+        SpaceSortOption.DATE -> "날짜"
+        SpaceSortOption.PLACE -> "장소"
+        SpaceSortOption.SCORE -> "점수"
+    }
+
+private fun SpaceRecord.toSessionSummary(): String = "세션 ${sessionCount}회 · 마지막 방문: ${lastVisited}"
+
+private fun SpaceRecord.toNoiseTag(): String = "소음 %.0fdB".format(avgNoise)
+
+private fun SpaceRecord.toIlluminanceTag(): String = "%.0flux".format(avgIlluminance)
+
+private fun SpaceRecord.toVibrationTag(): String = "%.2fm/s²".format(avgVibration)
 
 @Preview(showBackground = true)
 @Composable
