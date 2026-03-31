@@ -12,6 +12,7 @@ navigationCompose = "2.7.7"
 lifecycleViewmodelCompose = "2.8.3"
 mapsCompose = "4.4.1"
 playServicesMaps = "19.2.0"
+naverMaps = "3.23.1"
 playServicesAuth = "21.2.0"
 firebaseBom = "33.10.0"
 ktlint = "12.1.2"
@@ -36,6 +37,7 @@ androidx-navigation-compose = { group = "androidx.navigation", name = "navigatio
 androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycleViewmodelCompose" }
 maps-compose = { group = "com.google.maps.android", name = "maps-compose", version.ref = "mapsCompose" }
 play-services-maps = { group = "com.google.android.gms", name = "play-services-maps", version.ref = "playServicesMaps" }
+naver-maps = { group = "com.naver.maps", name = "map-sdk", version.ref = "naverMaps" }
 playServicesAuth = { group = "com.google.android.gms", name = "play-services-auth", version.ref = "playServicesAuth" }
 firebaseBom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
 firebaseAuth = { group = "com.google.firebase", name = "firebase-auth" }
