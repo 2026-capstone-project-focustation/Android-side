@@ -1,11 +1,11 @@
 package net.focustation.myapplication.navigation
 
 import androidx.compose.runtime.Composable
-import androidx.navigation.NavType
 import androidx.navigation.NavHostController
-import androidx.navigation.navArgument
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
 import net.focustation.myapplication.ui.screen.dashboard.DashboardScreen
 import net.focustation.myapplication.ui.screen.login.LoginScreen
 import net.focustation.myapplication.ui.screen.onboarding.OnboardingScreen

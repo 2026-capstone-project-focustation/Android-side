@@ -13,11 +13,11 @@ import kotlinx.coroutines.launch
 import net.focustation.myapplication.data.model.EnvironmentSnapshot
 import net.focustation.myapplication.data.model.FocusDataPoint
 import net.focustation.myapplication.score.ScoreCalculator
-import net.focustation.myapplication.session.SessionReportDraft
-import net.focustation.myapplication.session.SessionReportDraftStore
 import net.focustation.myapplication.sensor.LightSensorManager
 import net.focustation.myapplication.sensor.NoiseSensorManager
 import net.focustation.myapplication.sensor.VibrationSensorManager
+import net.focustation.myapplication.session.SessionReportDraft
+import net.focustation.myapplication.session.SessionReportDraftStore
 import net.focustation.myapplication.util.DebugLog
 import kotlin.math.roundToInt
 
@@ -391,7 +391,7 @@ class FocusSessionViewModel(
                         0
                     },
                 avgEnvironmentScore =
-                    avgScore,
+                avgScore,
                 avgNoise = avgNoise,
                 avgIlluminance = avgIlluminance,
                 avgVibration = avgVibration,

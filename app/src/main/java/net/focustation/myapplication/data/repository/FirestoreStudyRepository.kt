@@ -57,7 +57,9 @@ class FirestoreStudyRepository(
             val normalizedPlaceName = request.placeName.ifBlank { "장소 미지정" }
 
             DebugLog.d(
-                "[Firestore][세션저장][요청] uid=${uidForLog(uid)}, sessionId=$sessionId, 분=${request.totalFocusMinutes}, 타임라인=${request.focusTimeline.size}개",
+                "[Firestore][세션저장][요청] uid=${uidForLog(
+                    uid,
+                )}, sessionId=$sessionId, 분=${request.totalFocusMinutes}, 타임라인=${request.focusTimeline.size}개",
             )
 
             val sessionPayload =
@@ -147,19 +149,19 @@ class FirestoreStudyRepository(
 
             val records =
                 snapshot.documents.map { doc ->
-                val placeSnapshot = doc.get("placeSnapshot") as? Map<*, *>
-                StudySessionRecord(
-                    sessionId = doc.getString("sessionId") ?: doc.id,
-                    endedAtEpochMillis = doc.getTimestamp("endedAt")?.toDate()?.time ?: 0L,
-                    durationSec = doc.getLong("durationSec")?.toInt() ?: 0,
-                    focusScoreAvg = (doc.getDouble("focusScoreAvg") ?: 0.0).toFloat(),
-                    avgNoise = (doc.getDouble("avgNoise") ?: 0.0).toFloat(),
-                    avgIlluminance = (doc.getDouble("avgIlluminance") ?: 0.0).toFloat(),
-                    avgVibration = doc.getDouble("avgVibration") ?: 0.0,
-                    placeName = placeSnapshot?.get("name") as? String ?: "장소 미지정",
-                    focusTimeline = parseFocusTimeline(doc.get("focusTimeline")),
-                )
-            }
+                    val placeSnapshot = doc.get("placeSnapshot") as? Map<*, *>
+                    StudySessionRecord(
+                        sessionId = doc.getString("sessionId") ?: doc.id,
+                        endedAtEpochMillis = doc.getTimestamp("endedAt")?.toDate()?.time ?: 0L,
+                        durationSec = doc.getLong("durationSec")?.toInt() ?: 0,
+                        focusScoreAvg = (doc.getDouble("focusScoreAvg") ?: 0.0).toFloat(),
+                        avgNoise = (doc.getDouble("avgNoise") ?: 0.0).toFloat(),
+                        avgIlluminance = (doc.getDouble("avgIlluminance") ?: 0.0).toFloat(),
+                        avgVibration = doc.getDouble("avgVibration") ?: 0.0,
+                        placeName = placeSnapshot?.get("name") as? String ?: "장소 미지정",
+                        focusTimeline = parseFocusTimeline(doc.get("focusTimeline")),
+                    )
+                }
             DebugLog.d("[Firestore][목록조회][성공] uid=${uidForLog(uid)}, count=${records.size}")
             records
         }.onFailure { error ->
@@ -184,18 +186,20 @@ class FirestoreStudyRepository(
             val placeSnapshot = document.get("placeSnapshot") as? Map<*, *>
             val record =
                 StudySessionRecord(
-                sessionId = document.getString("sessionId") ?: document.id,
-                endedAtEpochMillis = document.getTimestamp("endedAt")?.toDate()?.time ?: 0L,
-                durationSec = document.getLong("durationSec")?.toInt() ?: 0,
-                focusScoreAvg = (document.getDouble("focusScoreAvg") ?: 0.0).toFloat(),
-                avgNoise = (document.getDouble("avgNoise") ?: 0.0).toFloat(),
-                avgIlluminance = (document.getDouble("avgIlluminance") ?: 0.0).toFloat(),
-                avgVibration = document.getDouble("avgVibration") ?: 0.0,
-                placeName = placeSnapshot?.get("name") as? String ?: "장소 미지정",
-                focusTimeline = parseFocusTimeline(document.get("focusTimeline")),
-            )
+                    sessionId = document.getString("sessionId") ?: document.id,
+                    endedAtEpochMillis = document.getTimestamp("endedAt")?.toDate()?.time ?: 0L,
+                    durationSec = document.getLong("durationSec")?.toInt() ?: 0,
+                    focusScoreAvg = (document.getDouble("focusScoreAvg") ?: 0.0).toFloat(),
+                    avgNoise = (document.getDouble("avgNoise") ?: 0.0).toFloat(),
+                    avgIlluminance = (document.getDouble("avgIlluminance") ?: 0.0).toFloat(),
+                    avgVibration = document.getDouble("avgVibration") ?: 0.0,
+                    placeName = placeSnapshot?.get("name") as? String ?: "장소 미지정",
+                    focusTimeline = parseFocusTimeline(document.get("focusTimeline")),
+                )
             DebugLog.d(
-                "[Firestore][상세조회][성공] uid=${uidForLog(uid)}, sessionId=${record.sessionId}, 타임라인=${record.focusTimeline.size}개",
+                "[Firestore][상세조회][성공] uid=${uidForLog(
+                    uid,
+                )}, sessionId=${record.sessionId}, 타임라인=${record.focusTimeline.size}개",
             )
             record
         }.onFailure { error ->
@@ -232,8 +236,7 @@ class FirestoreStudyRepository(
         }
     }
 
-    private fun generateSessionId(): String =
-        "${System.currentTimeMillis()}-${(1000..9999).random()}"
+    private fun generateSessionId(): String = "${System.currentTimeMillis()}-${(1000..9999).random()}"
 
     private fun buildStablePlaceId(request: SavedPlaceRequest): String {
         val normalizedName = request.name.trim().lowercase(Locale.ROOT)
@@ -243,6 +246,5 @@ class FirestoreStudyRepository(
         return "place_${abs(raw.hashCode())}"
     }
 
-    private fun uidForLog(uid: String): String =
-        if (uid.length <= 6) uid else "${uid.take(6)}..."
+    private fun uidForLog(uid: String): String = if (uid.length <= 6) uid else "${uid.take(6)}..."
 }
