@@ -40,6 +40,10 @@ fun SessionReportScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
+    LaunchedEffect(Unit) {
+        viewModel.saveSessionRecordIfNeeded()
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -195,6 +199,7 @@ fun SessionReportScreen(
             if (uiState.isFromActiveSession) {
                 Button(
                     onClick = { viewModel.savePlace() },
+                    enabled = !uiState.isSavingPlace,
                     modifier =
                         Modifier
                             .fillMaxWidth()
@@ -207,12 +212,40 @@ fun SessionReportScreen(
                         ),
                 ) {
                     Text(
-                        text = if (uiState.placeSaved) "📍 장소 저장됨" else "📍 해당 장소 저장",
+                        text =
+                            when {
+                                uiState.placeSaved -> "📍 장소 저장됨"
+                                uiState.isSavingPlace -> "저장 중..."
+                                else -> "📍 해당 장소 저장"
+                            },
                         style = MaterialTheme.typography.labelLarge,
                     )
                 }
                 Spacer(Modifier.height(10.dp))
             }
+
+            Text(
+                text =
+                    when {
+                        uiState.isSavingSession -> "세션 기록 저장 중..."
+                        uiState.errorMessage != null -> uiState.errorMessage ?: "저장 중 오류가 발생했어요."
+                        uiState.sessionSaved -> "세션 기록이 Firestore에 저장되었습니다."
+                        else -> ""
+                    },
+                style = MaterialTheme.typography.bodySmall,
+                color =
+                    if (uiState.errorMessage != null) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+            )
+
+            Spacer(Modifier.height(10.dp))
 
             // 공유 및 재측정 버튼
             Row(

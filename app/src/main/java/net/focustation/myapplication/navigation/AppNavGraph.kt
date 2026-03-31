@@ -43,6 +43,7 @@ fun AppNavGraph(navController: NavHostController) {
         composable(NavRoute.Dashboard.route) {
             DashboardScreen(
                 onStartSession = { navController.navigate(NavRoute.EnvironmentSession.route) },
+                onNavigateToReport = { navController.navigate(NavRoute.SessionReport.route) },
                 onNavigateToSpaceHistory = { navController.navigate(NavRoute.SpaceHistory.route) },
                 onNavigateToSettings = { navController.navigate(NavRoute.Settings.route) },
             )

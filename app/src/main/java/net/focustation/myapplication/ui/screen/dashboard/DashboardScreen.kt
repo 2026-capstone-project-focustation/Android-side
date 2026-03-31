@@ -37,6 +37,7 @@ import net.focustation.myapplication.ui.theme.Primary40
 @Composable
 fun DashboardScreen(
     onStartSession: () -> Unit,
+    onNavigateToReport: () -> Unit,
     onNavigateToSpaceHistory: () -> Unit,
     onNavigateToSettings: () -> Unit,
     viewModel: DashboardViewModel = viewModel(),
@@ -54,7 +55,7 @@ fun DashboardScreen(
                 )
                 NavigationBarItem(
                     selected = false,
-                    onClick = {},
+                    onClick = onNavigateToReport,
                     icon = { Text("📊", fontSize = 20.sp) },
                     label = { Text("리포트") },
                 )
@@ -257,6 +258,7 @@ private fun DashboardPreview() {
     FocustationTheme {
         DashboardScreen(
             onStartSession = {},
+            onNavigateToReport = {},
             onNavigateToSpaceHistory = {},
             onNavigateToSettings = {},
         )
