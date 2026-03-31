@@ -20,7 +20,19 @@ sealed class NavRoute(
     data object FeedbackSession : NavRoute("feedback_session")
 
     // Report
-    data object SessionReport : NavRoute("session_report")
+    data object SessionReport : NavRoute("session_report?fromSession={fromSession}") {
+        const val ARG_FROM_SESSION = "fromSession"
+
+        fun createRoute(fromSession: Boolean): String =
+            "session_report?fromSession=$fromSession"
+    }
+
+    data object SessionReportDetail : NavRoute("session_report_detail/{sessionId}") {
+        const val ARG_SESSION_ID = "sessionId"
+
+        fun createRoute(sessionId: String): String =
+            "session_report_detail/$sessionId"
+    }
 
     // Map / History
     data object SpaceHistory : NavRoute("space_history")

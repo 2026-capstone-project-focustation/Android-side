@@ -10,7 +10,16 @@ import kotlinx.coroutines.launch
 import net.focustation.myapplication.data.model.FocusDataPoint
 import net.focustation.myapplication.data.repository.FirestoreStudyRepository
 import net.focustation.myapplication.data.repository.SavedPlaceRequest
+import net.focustation.myapplication.data.repository.StudySessionRecord
 import net.focustation.myapplication.data.repository.StudySessionSaveRequest
+
+data class StudyHistoryUiItem(
+    val sessionId: String,
+    val placeName: String,
+    val focusScore: Int,
+    val durationMinutes: Int,
+    val endedAtEpochMillis: Long,
+)
 
 data class SessionReportUiState(
     val totalFocusMinutes: Int = 90,
@@ -30,13 +39,16 @@ data class SessionReportUiState(
         ),
     val placeSaved: Boolean = false,
     val isFromActiveSession: Boolean = true,
-    val placeName: String = "중앙 도서관",
-    val placeLatitude: Double = 37.5012,
-    val placeLongitude: Double = 127.0396,
+    val placeName: String = "",
+    val placeLatitude: Double? = null,
+    val placeLongitude: Double? = null,
     val isSavingSession: Boolean = false,
     val isSavingPlace: Boolean = false,
     val sessionSaved: Boolean = false,
     val errorMessage: String? = null,
+    val isLoadingHistory: Boolean = false,
+    val history: List<StudyHistoryUiItem> = emptyList(),
+    val historyErrorMessage: String? = null,
 )
 
 class SessionReportViewModel(
@@ -46,6 +58,19 @@ class SessionReportViewModel(
     val uiState: StateFlow<SessionReportUiState> = _uiState.asStateFlow()
 
     private var sessionSaveAttempted = false
+
+    init {
+        loadHistory()
+    }
+
+    fun onScreenEntered(isFromActiveSession: Boolean) {
+        _uiState.update { it.copy(isFromActiveSession = isFromActiveSession) }
+        if (isFromActiveSession) {
+            saveSessionRecordIfNeeded()
+        } else {
+            loadHistory()
+        }
+    }
 
     fun saveSessionRecordIfNeeded() {
         if (sessionSaveAttempted) return
@@ -78,6 +103,7 @@ class SessionReportViewModel(
                             errorMessage = null,
                         )
                     }
+                    loadHistory()
                 },
                 onFailure = { error ->
                     _uiState.update {
@@ -92,6 +118,10 @@ class SessionReportViewModel(
     }
 
     fun savePlace() {
+        if (_uiState.value.placeName.isBlank()) {
+            _uiState.update { it.copy(errorMessage = "장소 정보가 없어서 저장할 수 없어요.") }
+            return
+        }
         if (_uiState.value.placeSaved || _uiState.value.isSavingPlace) return
 
         viewModelScope.launch {
@@ -127,4 +157,40 @@ class SessionReportViewModel(
             )
         }
     }
+
+    private fun loadHistory() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingHistory = true, historyErrorMessage = null) }
+            val result = repository.getStudySessions()
+            result.fold(
+                onSuccess = { records ->
+                    _uiState.update {
+                        it.copy(
+                            isLoadingHistory = false,
+                            history = records.map(::toUiItem),
+                            historyErrorMessage = null,
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    _uiState.update {
+                        it.copy(
+                            isLoadingHistory = false,
+                            history = emptyList(),
+                            historyErrorMessage = error.message ?: "기록을 불러오지 못했어요.",
+                        )
+                    }
+                },
+            )
+        }
+    }
+
+    private fun toUiItem(record: StudySessionRecord): StudyHistoryUiItem =
+        StudyHistoryUiItem(
+            sessionId = record.sessionId,
+            placeName = record.placeName,
+            focusScore = record.focusScoreAvg.toInt(),
+            durationMinutes = (record.durationSec / 60).coerceAtLeast(1),
+            endedAtEpochMillis = record.endedAtEpochMillis,
+        )
 }

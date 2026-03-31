@@ -1,12 +1,15 @@
 package net.focustation.myapplication.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.navigation.NavType
 import androidx.navigation.NavHostController
+import androidx.navigation.navArgument
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import net.focustation.myapplication.ui.screen.dashboard.DashboardScreen
 import net.focustation.myapplication.ui.screen.login.LoginScreen
 import net.focustation.myapplication.ui.screen.onboarding.OnboardingScreen
+import net.focustation.myapplication.ui.screen.report.SessionReportDetailScreen
 import net.focustation.myapplication.ui.screen.report.SessionReportScreen
 import net.focustation.myapplication.ui.screen.session.EnvironmentSessionScreen
 import net.focustation.myapplication.ui.screen.session.FeedbackSessionScreen
@@ -43,7 +46,7 @@ fun AppNavGraph(navController: NavHostController) {
         composable(NavRoute.Dashboard.route) {
             DashboardScreen(
                 onStartSession = { navController.navigate(NavRoute.EnvironmentSession.route) },
-                onNavigateToReport = { navController.navigate(NavRoute.SessionReport.route) },
+                onNavigateToReport = { navController.navigate(NavRoute.SessionReport.createRoute(false)) },
                 onNavigateToSpaceHistory = { navController.navigate(NavRoute.SpaceHistory.route) },
                 onNavigateToSettings = { navController.navigate(NavRoute.Settings.route) },
             )
@@ -66,26 +69,58 @@ fun AppNavGraph(navController: NavHostController) {
         composable(NavRoute.FeedbackSession.route) {
             FeedbackSessionScreen(
                 onSubmit = {
-                    navController.navigate(NavRoute.SessionReport.route) {
+                    navController.navigate(NavRoute.SessionReport.createRoute(true)) {
                         popUpTo(NavRoute.Dashboard.route)
                     }
                 },
                 onSkip = {
-                    navController.navigate(NavRoute.SessionReport.route) {
+                    navController.navigate(NavRoute.SessionReport.createRoute(true)) {
                         popUpTo(NavRoute.Dashboard.route)
                     }
                 },
             )
         }
 
-        composable(NavRoute.SessionReport.route) {
+        composable(
+            route = NavRoute.SessionReport.route,
+            arguments =
+                listOf(
+                    navArgument(NavRoute.SessionReport.ARG_FROM_SESSION) {
+                        type = NavType.BoolType
+                        defaultValue = false
+                    },
+                ),
+        ) { backStackEntry ->
+            val isFromActiveSession =
+                backStackEntry.arguments?.getBoolean(NavRoute.SessionReport.ARG_FROM_SESSION) ?: false
             SessionReportScreen(
+                isFromActiveSession = isFromActiveSession,
+                onHistoryItemClick = { sessionId ->
+                    navController.navigate(NavRoute.SessionReportDetail.createRoute(sessionId))
+                },
                 onBack = {
                     navController.navigate(NavRoute.Dashboard.route) {
                         popUpTo(NavRoute.Dashboard.route) { inclusive = true }
                     }
                 },
                 onRetry = { navController.navigate(NavRoute.EnvironmentSession.route) },
+            )
+        }
+
+        composable(
+            route = NavRoute.SessionReportDetail.route,
+            arguments =
+                listOf(
+                    navArgument(NavRoute.SessionReportDetail.ARG_SESSION_ID) {
+                        type = NavType.StringType
+                    },
+                ),
+        ) { backStackEntry ->
+            val sessionId =
+                backStackEntry.arguments?.getString(NavRoute.SessionReportDetail.ARG_SESSION_ID).orEmpty()
+            SessionReportDetailScreen(
+                sessionId = sessionId,
+                onBack = { navController.popBackStack() },
             )
         }
 
