@@ -44,6 +44,7 @@ import com.naver.maps.map.overlay.Marker
 import com.naver.maps.map.util.FusedLocationSource
 import net.focustation.myapplication.data.model.SpaceRecord
 import net.focustation.myapplication.ui.theme.*
+import net.focustation.myapplication.util.DebugLog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -275,10 +276,10 @@ private fun NaverMapSection(
     val mapView =
         remember {
             try {
-                android.util.Log.d("NaverMap", "Creating MapView...")
+                DebugLog.d("Creating MapView...")
                 MapView(context)
             } catch (e: Exception) {
-                android.util.Log.e("NaverMap", "Failed to create MapView", e)
+                DebugLog.e("Failed to create MapView", e)
                 null
             }
         }
@@ -287,9 +288,9 @@ private fun NaverMapSection(
         val createdMapView = mapView ?: return@LaunchedEffect
         try {
             createdMapView.onCreate(null)
-            android.util.Log.d("NaverMap", "MapView onCreate called successfully")
+            DebugLog.d("MapView onCreate called successfully")
         } catch (e: Exception) {
-            android.util.Log.e("NaverMap", "MapView onCreate failed", e)
+            DebugLog.e("MapView onCreate failed", e)
         }
     }
 
@@ -306,17 +307,17 @@ private fun NaverMapSection(
         val observer =
             LifecycleEventObserver { _, event ->
                 when (event) {
-                    Lifecycle.Event.ON_START -> runCatching { mapView.onStart() }.onFailure { android.util.Log.e("NaverMap", "onStart error", it) }
-                    Lifecycle.Event.ON_RESUME -> runCatching { mapView.onResume() }.onFailure { android.util.Log.e("NaverMap", "onResume error", it) }
-                    Lifecycle.Event.ON_PAUSE -> runCatching { mapView.onPause() }.onFailure { android.util.Log.e("NaverMap", "onPause error", it) }
-                    Lifecycle.Event.ON_STOP -> runCatching { mapView.onStop() }.onFailure { android.util.Log.e("NaverMap", "onStop error", it) }
+                    Lifecycle.Event.ON_START -> runCatching { mapView.onStart() }.onFailure { DebugLog.e("onStart error", it) }
+                    Lifecycle.Event.ON_RESUME -> runCatching { mapView.onResume() }.onFailure { DebugLog.e("onResume error", it) }
+                    Lifecycle.Event.ON_PAUSE -> runCatching { mapView.onPause() }.onFailure { DebugLog.e("onPause error", it) }
+                    Lifecycle.Event.ON_STOP -> runCatching { mapView.onStop() }.onFailure { DebugLog.e("onStop error", it) }
                     else -> Unit
                 }
             }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-            runCatching { mapView.onDestroy() }.onFailure { android.util.Log.e("NaverMap", "onDestroy error", it) }
+            runCatching { mapView.onDestroy() }.onFailure { DebugLog.e("onDestroy error", it) }
             renderedMarkers.forEach { it.map = null }
             renderedMarkers.clear()
         }
@@ -334,10 +335,10 @@ private fun NaverMapSection(
                     map.moveCamera(CameraUpdate.scrollTo(LatLng(first.latitude, first.longitude)))
                     movedToInitialCamera = true
                 }
-                android.util.Log.d("NaverMap", "Map initialized successfully")
+                DebugLog.d("Map initialized successfully")
                 mapInitErrorMessage = null
             } catch (e: Exception) {
-                android.util.Log.e("NaverMap", "Failed to initialize map", e)
+                DebugLog.e("Failed to initialize map", e)
                 mapInitErrorMessage = "지도 초기화 중 오류: ${e.message}"
             }
         }
