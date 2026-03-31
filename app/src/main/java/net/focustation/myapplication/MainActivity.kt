@@ -21,7 +21,10 @@ class MainActivity : ComponentActivity() {
         val naverMapMcpId =
             runCatching {
                 val appInfo = packageManager.getApplicationInfo(packageName, PackageManager.GET_META_DATA)
-                appInfo.metaData?.getString(NAVER_MAP_MCP_ID_META_KEY).orEmpty().trim()
+                appInfo.metaData
+                    ?.getString(NAVER_MAP_MCP_ID_META_KEY)
+                    .orEmpty()
+                    .trim()
             }.onFailure { error ->
                 DebugLog.e("Failed to read NAVER_MAP_MCP_ID from manifest metadata", error)
             }.getOrDefault("")
@@ -36,7 +39,6 @@ class MainActivity : ComponentActivity() {
                 DebugLog.e("Failed to configure NaverMapSdk Client", e)
             }
         }
-
 
         setContent {
             FocustationTheme {

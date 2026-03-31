@@ -17,9 +17,10 @@ android {
             }
         }
     val naverMapMcpId =
-        ((project.findProperty("NAVER_MAP_MCP_ID") as String?)
-            ?: localProperties.getProperty("NAVER_MAP_MCP_ID", ""))
-            .trim()
+        (
+            (project.findProperty("NAVER_MAP_MCP_ID") as String?)
+                ?: localProperties.getProperty("NAVER_MAP_MCP_ID", "")
+        ).trim()
     val escapedNaverMapMcpId =
         naverMapMcpId
             .replace("\\", "\\\\")

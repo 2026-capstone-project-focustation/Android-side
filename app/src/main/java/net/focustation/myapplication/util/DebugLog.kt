@@ -21,10 +21,12 @@ object DebugLog {
         }
     }
 
-    fun e(message: String, throwable: Throwable? = null) {
+    fun e(
+        message: String,
+        throwable: Throwable? = null,
+    ) {
         if (BuildConfig.DEBUG) {
             Log.e(TAG, message, throwable)
         }
     }
 }
-
