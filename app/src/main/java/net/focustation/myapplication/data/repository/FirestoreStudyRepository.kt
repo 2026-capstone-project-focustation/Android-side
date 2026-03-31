@@ -7,6 +7,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.tasks.await
 import net.focustation.myapplication.data.model.FocusDataPoint
+import net.focustation.myapplication.util.DebugLog
 import java.util.Locale
 import kotlin.math.abs
 
@@ -55,6 +56,10 @@ class FirestoreStudyRepository(
             val totalDurationSec = request.totalFocusMinutes * 60
             val normalizedPlaceName = request.placeName.ifBlank { "장소 미지정" }
 
+            DebugLog.d(
+                "[Firestore][세션저장][요청] uid=${uidForLog(uid)}, sessionId=$sessionId, 분=${request.totalFocusMinutes}, 타임라인=${request.focusTimeline.size}개",
+            )
+
             val sessionPayload =
                 hashMapOf(
                     "sessionId" to sessionId,
@@ -90,7 +95,11 @@ class FirestoreStudyRepository(
                 .set(sessionPayload)
                 .await()
 
+            DebugLog.d("[Firestore][세션저장][성공] uid=${uidForLog(uid)}, sessionId=$sessionId")
+
             sessionId
+        }.onFailure { error ->
+            DebugLog.e("[Firestore][세션저장][실패] ${error.message}", error)
         }
 
     suspend fun savePlace(request: SavedPlaceRequest): Result<Unit> =
@@ -98,6 +107,9 @@ class FirestoreStudyRepository(
             val uid = auth.currentUser?.uid ?: error("로그인 후 장소를 저장할 수 있어요.")
             if (request.name.isBlank()) error("장소 이름이 비어 있어요.")
             val placeId = buildStablePlaceId(request)
+            DebugLog.d(
+                "[Firestore][장소저장][요청] uid=${uidForLog(uid)}, placeId=$placeId, name=${request.name}",
+            )
             val placePayload =
                 hashMapOf(
                     "name" to request.name,
@@ -114,11 +126,15 @@ class FirestoreStudyRepository(
                 .document(placeId)
                 .set(placePayload)
                 .await()
+            DebugLog.d("[Firestore][장소저장][성공] uid=${uidForLog(uid)}, placeId=$placeId")
+        }.onFailure { error ->
+            DebugLog.e("[Firestore][장소저장][실패] ${error.message}", error)
         }
 
     suspend fun getStudySessions(limit: Long = 50): Result<List<StudySessionRecord>> =
         runCatching {
             val uid = auth.currentUser?.uid ?: error("로그인 후 기록을 불러올 수 있어요.")
+            DebugLog.d("[Firestore][목록조회][요청] uid=${uidForLog(uid)}, limit=$limit")
             val snapshot =
                 firestore
                     .collection("users")
@@ -129,7 +145,8 @@ class FirestoreStudyRepository(
                     .get()
                     .await()
 
-            snapshot.documents.map { doc ->
+            val records =
+                snapshot.documents.map { doc ->
                 val placeSnapshot = doc.get("placeSnapshot") as? Map<*, *>
                 StudySessionRecord(
                     sessionId = doc.getString("sessionId") ?: doc.id,
@@ -143,11 +160,16 @@ class FirestoreStudyRepository(
                     focusTimeline = parseFocusTimeline(doc.get("focusTimeline")),
                 )
             }
+            DebugLog.d("[Firestore][목록조회][성공] uid=${uidForLog(uid)}, count=${records.size}")
+            records
+        }.onFailure { error ->
+            DebugLog.e("[Firestore][목록조회][실패] ${error.message}", error)
         }
 
     suspend fun getStudySessionById(sessionId: String): Result<StudySessionRecord> =
         runCatching {
             val uid = auth.currentUser?.uid ?: error("로그인 후 기록을 불러올 수 있어요.")
+            DebugLog.d("[Firestore][상세조회][요청] uid=${uidForLog(uid)}, sessionId=$sessionId")
             val document =
                 firestore
                     .collection("users")
@@ -160,7 +182,8 @@ class FirestoreStudyRepository(
             if (!document.exists()) error("선택한 세션 기록을 찾을 수 없어요.")
 
             val placeSnapshot = document.get("placeSnapshot") as? Map<*, *>
-            StudySessionRecord(
+            val record =
+                StudySessionRecord(
                 sessionId = document.getString("sessionId") ?: document.id,
                 endedAtEpochMillis = document.getTimestamp("endedAt")?.toDate()?.time ?: 0L,
                 durationSec = document.getLong("durationSec")?.toInt() ?: 0,
@@ -171,6 +194,28 @@ class FirestoreStudyRepository(
                 placeName = placeSnapshot?.get("name") as? String ?: "장소 미지정",
                 focusTimeline = parseFocusTimeline(document.get("focusTimeline")),
             )
+            DebugLog.d(
+                "[Firestore][상세조회][성공] uid=${uidForLog(uid)}, sessionId=${record.sessionId}, 타임라인=${record.focusTimeline.size}개",
+            )
+            record
+        }.onFailure { error ->
+            DebugLog.e("[Firestore][상세조회][실패] sessionId=$sessionId, ${error.message}", error)
+        }
+
+    suspend fun deleteStudySession(sessionId: String): Result<Unit> =
+        runCatching {
+            val uid = auth.currentUser?.uid ?: error("로그인 후 기록을 삭제할 수 있어요.")
+            DebugLog.d("[Firestore][삭제][요청] uid=${uidForLog(uid)}, sessionId=$sessionId")
+            firestore
+                .collection("users")
+                .document(uid)
+                .collection("sessions")
+                .document(sessionId)
+                .delete()
+                .await()
+            DebugLog.d("[Firestore][삭제][성공] uid=${uidForLog(uid)}, sessionId=$sessionId")
+        }.onFailure { error ->
+            DebugLog.e("[Firestore][삭제][실패] sessionId=$sessionId, ${error.message}", error)
         }
 
     private fun parseFocusTimeline(raw: Any?): List<FocusDataPoint> {
@@ -197,4 +242,7 @@ class FirestoreStudyRepository(
         val raw = "$normalizedName|$lat|$lon"
         return "place_${abs(raw.hashCode())}"
     }
+
+    private fun uidForLog(uid: String): String =
+        if (uid.length <= 6) uid else "${uid.take(6)}..."
 }

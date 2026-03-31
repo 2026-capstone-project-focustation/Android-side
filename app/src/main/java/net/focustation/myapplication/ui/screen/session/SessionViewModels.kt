@@ -18,6 +18,7 @@ import net.focustation.myapplication.session.SessionReportDraftStore
 import net.focustation.myapplication.sensor.LightSensorManager
 import net.focustation.myapplication.sensor.NoiseSensorManager
 import net.focustation.myapplication.sensor.VibrationSensorManager
+import net.focustation.myapplication.util.DebugLog
 import kotlin.math.roundToInt
 
 // ─── 환경 분석 세션 ───────────────────────────────────────────────────────────
@@ -83,6 +84,7 @@ class EnvironmentSessionViewModel(
     fun startNoiseCollection() {
         if (noiseJob != null) return
         hasNoisePerm = true
+        DebugLog.d("[집중세션][소음측정] 마이크 소음 측정을 시작합니다.")
         noiseJob =
             viewModelScope.launch {
                 noiseManager.getNoiseFlow().collect { db ->
@@ -328,6 +330,7 @@ class FocusSessionViewModel(
                 )
             }
         }
+        DebugLog.d("[집중세션][시작] 세션을 시작합니다. (재개=${_uiState.value.isPaused})")
         _uiState.update { it.copy(isRunning = true, isPaused = false) }
         timerJob?.cancel()
         timerJob =
@@ -347,6 +350,7 @@ class FocusSessionViewModel(
      */
     fun pauseSession() {
         timerJob?.cancel()
+        DebugLog.d("[집중세션][일시정지] 경과=${_uiState.value.elapsedSeconds}초")
         _uiState.update { it.copy(isRunning = false, isPaused = true) }
     }
 
@@ -360,6 +364,24 @@ class FocusSessionViewModel(
         timerJob?.cancel()
 
         val state = _uiState.value
+        val timeline = buildFocusTimeline(state.fitHistory, state.elapsedSeconds)
+        val avgScore =
+            if (state.fitHistory.isNotEmpty()) {
+                state.fitHistory.average().toFloat()
+            } else {
+                state.environmentFitScore
+            }
+        val avgNoise = if (noiseCount > 0) (noiseSum / noiseCount).toFloat() else 0f
+        val avgIlluminance = if (lightCount > 0) (lightSum / lightCount).toFloat() else 0f
+        val avgVibration = if (vibrationCount > 0) vibrationSum / vibrationCount else 0.0
+
+        DebugLog.d(
+            "[집중세션][종료] 경과=${state.elapsedSeconds}초, 히스토리=${state.fitHistory.size}개, 타임라인=${timeline.size}개",
+        )
+        DebugLog.d(
+            "[집중세션][종료] 평균점수=$avgScore, 평균소음=$avgNoise, 평균조도=$avgIlluminance, 평균진동=$avgVibration",
+        )
+
         SessionReportDraftStore.save(
             SessionReportDraft(
                 totalFocusMinutes =
@@ -369,17 +391,14 @@ class FocusSessionViewModel(
                         0
                     },
                 avgEnvironmentScore =
-                    if (state.fitHistory.isNotEmpty()) {
-                        state.fitHistory.average().toFloat()
-                    } else {
-                        state.environmentFitScore
-                    },
-                avgNoise = if (noiseCount > 0) (noiseSum / noiseCount).toFloat() else 0f,
-                avgIlluminance = if (lightCount > 0) (lightSum / lightCount).toFloat() else 0f,
-                avgVibration = if (vibrationCount > 0) vibrationSum / vibrationCount else 0.0,
-                focusTimeline = buildFocusTimeline(state.fitHistory, state.elapsedSeconds),
+                    avgScore,
+                avgNoise = avgNoise,
+                avgIlluminance = avgIlluminance,
+                avgVibration = avgVibration,
+                focusTimeline = timeline,
             ),
         )
+        DebugLog.d("[집중세션][종료] draft 저장 완료")
 
         lightBuf.clear()
         noiseBuf.clear()
@@ -435,6 +454,7 @@ class FocusSessionViewModel(
      */
     override fun onCleared() {
         super.onCleared()
+        DebugLog.d("[집중세션][정리] ViewModel 해제")
         timerJob?.cancel()
         noiseJob?.cancel()
     }

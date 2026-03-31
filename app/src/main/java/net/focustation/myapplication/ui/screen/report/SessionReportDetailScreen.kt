@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import net.focustation.myapplication.data.repository.FirestoreStudyRepository
 import net.focustation.myapplication.data.repository.StudySessionRecord
 import net.focustation.myapplication.ui.components.MiniLineGraph
+import net.focustation.myapplication.util.DebugLog
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -52,15 +53,18 @@ fun SessionReportDetailScreen(
     var errorMessage by remember(sessionId) { mutableStateOf<String?>(null) }
 
     LaunchedEffect(sessionId) {
+        DebugLog.d("[리포트상세][조회] 시작 sessionId=$sessionId")
         isLoading = true
         val result = repository.getStudySessionById(sessionId)
         result.fold(
             onSuccess = {
+                DebugLog.d("[리포트상세][조회] 성공 sessionId=${it.sessionId}, 타임라인=${it.focusTimeline.size}개")
                 record = it
                 errorMessage = null
                 isLoading = false
             },
             onFailure = {
+                DebugLog.e("[리포트상세][조회] 실패 sessionId=$sessionId, ${it.message}", it)
                 record = null
                 errorMessage = it.message ?: "세션 상세 정보를 불러오지 못했어요."
                 isLoading = false
