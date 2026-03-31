@@ -27,9 +27,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -66,11 +66,12 @@ fun SpaceHistoryScreen(
 
     // 시스템 설정에서 권한 변경 시 UI 새로고침을 위한 Lifecycle 옵저버
     DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                hasLocationPermission = context.hasLocationPermission()
+        val observer =
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    hasLocationPermission = context.hasLocationPermission()
+                }
             }
-        }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
@@ -178,7 +179,10 @@ fun SpaceHistoryScreen(
                     ) {
                         if (!isNaverMapMcpIdConfigured) {
                             ElevatedCard(
-                                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                                colors =
+                                    CardDefaults.elevatedCardColors(
+                                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                                    ),
                             ) {
                                 Text(
                                     text = "NAVER_MAP_MCP_ID가 비어 있어요. local.properties 또는 gradle.properties를 확인해주세요.",
@@ -190,7 +194,10 @@ fun SpaceHistoryScreen(
 
                         if (!hasLocationPermission) {
                             ElevatedCard(
-                                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                colors =
+                                    CardDefaults.elevatedCardColors(
+                                        containerColor = MaterialTheme.colorScheme.surface,
+                                    ),
                             ) {
                                 Row(
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
@@ -294,7 +301,8 @@ private fun NaverMapSection(
         }
     }
 
-    val locationSource = remember(activity) { activity?.let { FusedLocationSource(it, LOCATION_PERMISSION_REQUEST_CODE) } }
+    val locationSource =
+        remember(activity) { activity?.let { FusedLocationSource(it, LOCATION_PERMISSION_REQUEST_CODE) } }
     var naverMap by remember { mutableStateOf<NaverMap?>(null) }
     val renderedMarkers = remember { mutableStateListOf<Marker>() }
     var movedToInitialCamera by remember { mutableStateOf(false) }
@@ -307,10 +315,34 @@ private fun NaverMapSection(
         val observer =
             LifecycleEventObserver { _, event ->
                 when (event) {
-                    Lifecycle.Event.ON_START -> runCatching { mapView.onStart() }.onFailure { DebugLog.e("onStart error", it) }
-                    Lifecycle.Event.ON_RESUME -> runCatching { mapView.onResume() }.onFailure { DebugLog.e("onResume error", it) }
-                    Lifecycle.Event.ON_PAUSE -> runCatching { mapView.onPause() }.onFailure { DebugLog.e("onPause error", it) }
-                    Lifecycle.Event.ON_STOP -> runCatching { mapView.onStop() }.onFailure { DebugLog.e("onStop error", it) }
+                    Lifecycle.Event.ON_START ->
+                        runCatching { mapView.onStart() }.onFailure {
+                            DebugLog.e(
+                                "onStart error",
+                                it,
+                            )
+                        }
+                    Lifecycle.Event.ON_RESUME ->
+                        runCatching { mapView.onResume() }.onFailure {
+                            DebugLog.e(
+                                "onResume error",
+                                it,
+                            )
+                        }
+                    Lifecycle.Event.ON_PAUSE ->
+                        runCatching { mapView.onPause() }.onFailure {
+                            DebugLog.e(
+                                "onPause error",
+                                it,
+                            )
+                        }
+                    Lifecycle.Event.ON_STOP ->
+                        runCatching { mapView.onStop() }.onFailure {
+                            DebugLog.e(
+                                "onStop error",
+                                it,
+                            )
+                        }
                     else -> Unit
                 }
             }
@@ -406,9 +438,17 @@ private fun NaverMapSection(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("지도 초기화 실패", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error)
                 if (mapInitErrorMessage != null) {
-                    Text(mapInitErrorMessage!!, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                    Text(
+                        mapInitErrorMessage!!,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
                 } else {
-                    Text("네이버 지도 SDK를 초기화할 수 없습니다.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                    Text(
+                        "네이버 지도 SDK를 초기화할 수 없습니다.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
                 }
             }
         }
@@ -616,7 +656,11 @@ private tailrec fun Context.findActivity(): Activity? =
 private fun Context.hasNaverMapMcpIdConfigured(): Boolean =
     runCatching {
         val appInfo = packageManager.getApplicationInfo(packageName, PackageManager.GET_META_DATA)
-        val clientId = appInfo.metaData?.getString(NAVER_MAP_MCP_ID_META_KEY).orEmpty().trim()
+        val clientId =
+            appInfo.metaData
+                ?.getString(NAVER_MAP_MCP_ID_META_KEY)
+                .orEmpty()
+                .trim()
         clientId.isNotEmpty() && !clientId.startsWith("\${")
     }.getOrDefault(false)
 
@@ -627,7 +671,7 @@ private fun SpaceSortOption.toDisplayLabel(): String =
         SpaceSortOption.SCORE -> "점수"
     }
 
-private fun SpaceRecord.toSessionSummary(): String = "세션 ${sessionCount}회 · 마지막 방문: ${lastVisited}"
+private fun SpaceRecord.toSessionSummary(): String = "세션 ${sessionCount}회 · 마지막 방문: $lastVisited"
 
 private fun SpaceRecord.toNoiseTag(): String = "소음 %.0fdB".format(avgNoise)
 
