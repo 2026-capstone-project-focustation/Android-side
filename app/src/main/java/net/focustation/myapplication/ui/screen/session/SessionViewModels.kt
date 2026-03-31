@@ -11,10 +11,14 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import net.focustation.myapplication.data.model.EnvironmentSnapshot
+import net.focustation.myapplication.data.model.FocusDataPoint
 import net.focustation.myapplication.score.ScoreCalculator
+import net.focustation.myapplication.session.SessionReportDraft
+import net.focustation.myapplication.session.SessionReportDraftStore
 import net.focustation.myapplication.sensor.LightSensorManager
 import net.focustation.myapplication.sensor.NoiseSensorManager
 import net.focustation.myapplication.sensor.VibrationSensorManager
+import kotlin.math.roundToInt
 
 // ─── 환경 분석 세션 ───────────────────────────────────────────────────────────
 
@@ -211,9 +215,15 @@ class FocusSessionViewModel(
     private val noiseBuf = ArrayDeque<Double>()
     private val vibBuf = ArrayDeque<Double>()
 
+    private var lightSum = 0.0
+    private var lightCount = 0
+    private var noiseSum = 0.0
+    private var noiseCount = 0
+    private var vibrationSum = 0.0
+    private var vibrationCount = 0
+
     companion object {
         private const val WINDOW = 30
-        private const val DISPLAY_HISTORY = 30
     }
 
     init {
@@ -221,6 +231,10 @@ class FocusSessionViewModel(
             lightManager.getLightFlow().collect { lux ->
                 lightBuf.addLast(lux)
                 if (lightBuf.size > WINDOW) lightBuf.removeFirst()
+                if (_uiState.value.isRunning) {
+                    lightSum += lux
+                    lightCount += 1
+                }
                 recalculate()
             }
         }
@@ -228,6 +242,10 @@ class FocusSessionViewModel(
             vibrationManager.getVibrationFlow().collect { m ->
                 vibBuf.addLast(m)
                 if (vibBuf.size > WINDOW) vibBuf.removeFirst()
+                if (_uiState.value.isRunning) {
+                    vibrationSum += m
+                    vibrationCount += 1
+                }
                 recalculate()
             }
         }
@@ -248,6 +266,10 @@ class FocusSessionViewModel(
                 noiseManager.getNoiseFlow().collect { db ->
                     noiseBuf.addLast(db)
                     if (noiseBuf.size > WINDOW) noiseBuf.removeFirst()
+                    if (_uiState.value.isRunning) {
+                        noiseSum += db
+                        noiseCount += 1
+                    }
                     recalculate()
                 }
             }
@@ -279,7 +301,7 @@ class FocusSessionViewModel(
                 environmentFitScore = total,
                 fitHistory =
                     if (s.isRunning) {
-                        (s.fitHistory + total).takeLast(DISPLAY_HISTORY)
+                        s.fitHistory + total
                     } else {
                         s.fitHistory
                     },
@@ -297,6 +319,14 @@ class FocusSessionViewModel(
             lightBuf.clear()
             noiseBuf.clear()
             vibBuf.clear()
+            resetAggregates()
+            _uiState.update {
+                it.copy(
+                    elapsedSeconds = 0,
+                    fitHistory = emptyList(),
+                    environmentFitScore = 0f,
+                )
+            }
         }
         _uiState.update { it.copy(isRunning = true, isPaused = false) }
         timerJob?.cancel()
@@ -328,10 +358,74 @@ class FocusSessionViewModel(
      */
     fun stopSession() {
         timerJob?.cancel()
+
+        val state = _uiState.value
+        SessionReportDraftStore.save(
+            SessionReportDraft(
+                totalFocusMinutes =
+                    if (state.elapsedSeconds > 0) {
+                        (state.elapsedSeconds + 59) / 60
+                    } else {
+                        0
+                    },
+                avgEnvironmentScore =
+                    if (state.fitHistory.isNotEmpty()) {
+                        state.fitHistory.average().toFloat()
+                    } else {
+                        state.environmentFitScore
+                    },
+                avgNoise = if (noiseCount > 0) (noiseSum / noiseCount).toFloat() else 0f,
+                avgIlluminance = if (lightCount > 0) (lightSum / lightCount).toFloat() else 0f,
+                avgVibration = if (vibrationCount > 0) vibrationSum / vibrationCount else 0.0,
+                focusTimeline = buildFocusTimeline(state.fitHistory, state.elapsedSeconds),
+            ),
+        )
+
         lightBuf.clear()
         noiseBuf.clear()
         vibBuf.clear()
-        _uiState.update { it.copy(isRunning = false, isPaused = false) }
+        resetAggregates()
+        _uiState.update { FocusSessionUiState() }
+    }
+
+    private fun resetAggregates() {
+        lightSum = 0.0
+        lightCount = 0
+        noiseSum = 0.0
+        noiseCount = 0
+        vibrationSum = 0.0
+        vibrationCount = 0
+    }
+
+    private fun buildFocusTimeline(
+        fitHistory: List<Float>,
+        elapsedSeconds: Int,
+    ): List<FocusDataPoint> {
+        if (fitHistory.isEmpty()) return emptyList()
+
+        val maxPoints = 24
+        val indices =
+            if (fitHistory.size <= maxPoints) {
+                fitHistory.indices.toList()
+            } else {
+                (0 until maxPoints)
+                    .map { i ->
+                        ((i.toDouble() * (fitHistory.size - 1)) / (maxPoints - 1)).roundToInt()
+                    }.distinct()
+            }
+
+        return indices.map { index ->
+            val secondAtPoint =
+                if (fitHistory.size <= 1 || elapsedSeconds <= 0) {
+                    0
+                } else {
+                    ((index.toDouble() / (fitHistory.size - 1)) * elapsedSeconds).toInt()
+                }
+            FocusDataPoint(
+                timeLabel = "${secondAtPoint / 60}분",
+                focusScore = fitHistory[index].coerceIn(0f, 100f),
+            )
+        }
     }
 
     /**

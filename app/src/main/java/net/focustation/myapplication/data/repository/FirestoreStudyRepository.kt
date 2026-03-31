@@ -37,6 +37,7 @@ data class StudySessionRecord(
     val avgIlluminance: Float,
     val avgVibration: Double,
     val placeName: String,
+    val focusTimeline: List<FocusDataPoint> = emptyList(),
 )
 
 class FirestoreStudyRepository(
@@ -139,6 +140,7 @@ class FirestoreStudyRepository(
                     avgIlluminance = (doc.getDouble("avgIlluminance") ?: 0.0).toFloat(),
                     avgVibration = doc.getDouble("avgVibration") ?: 0.0,
                     placeName = placeSnapshot?.get("name") as? String ?: "장소 미지정",
+                    focusTimeline = parseFocusTimeline(doc.get("focusTimeline")),
                 )
             }
         }
@@ -167,8 +169,23 @@ class FirestoreStudyRepository(
                 avgIlluminance = (document.getDouble("avgIlluminance") ?: 0.0).toFloat(),
                 avgVibration = document.getDouble("avgVibration") ?: 0.0,
                 placeName = placeSnapshot?.get("name") as? String ?: "장소 미지정",
+                focusTimeline = parseFocusTimeline(document.get("focusTimeline")),
             )
         }
+
+    private fun parseFocusTimeline(raw: Any?): List<FocusDataPoint> {
+        val points = raw as? List<*> ?: return emptyList()
+        return points.mapNotNull { entry ->
+            val map = entry as? Map<*, *> ?: return@mapNotNull null
+            val timeLabel = (map["timeLabel"] as? String)?.trim().orEmpty()
+            val score = (map["focusScore"] as? Number)?.toFloat() ?: return@mapNotNull null
+            if (timeLabel.isBlank()) return@mapNotNull null
+            FocusDataPoint(
+                timeLabel = timeLabel,
+                focusScore = score.coerceIn(0f, 100f),
+            )
+        }
+    }
 
     private fun generateSessionId(): String =
         "${System.currentTimeMillis()}-${(1000..9999).random()}"

@@ -12,6 +12,7 @@ import net.focustation.myapplication.data.repository.FirestoreStudyRepository
 import net.focustation.myapplication.data.repository.SavedPlaceRequest
 import net.focustation.myapplication.data.repository.StudySessionRecord
 import net.focustation.myapplication.data.repository.StudySessionSaveRequest
+import net.focustation.myapplication.session.SessionReportDraftStore
 
 data class StudyHistoryUiItem(
     val sessionId: String,
@@ -22,21 +23,12 @@ data class StudyHistoryUiItem(
 )
 
 data class SessionReportUiState(
-    val totalFocusMinutes: Int = 90,
+    val totalFocusMinutes: Int = 0,
     val avgEnvironmentScore: Float = 0f,
-    val avgNoise: Float = 38.5f,
-    val avgIlluminance: Float = 430f,
+    val avgNoise: Float = 0f,
+    val avgIlluminance: Float = 0f,
     val avgVibration: Double = 0.0,
-    val focusTimeline: List<FocusDataPoint> =
-        listOf(
-            FocusDataPoint("0분", 70f),
-            FocusDataPoint("15분", 80f),
-            FocusDataPoint("30분", 86f),
-            FocusDataPoint("45분", 76f),
-            FocusDataPoint("60분", 90f),
-            FocusDataPoint("75분", 84f),
-            FocusDataPoint("90분", 92f),
-        ),
+    val focusTimeline: List<FocusDataPoint> = emptyList(),
     val placeSaved: Boolean = false,
     val isFromActiveSession: Boolean = true,
     val placeName: String = "",
@@ -66,6 +58,31 @@ class SessionReportViewModel(
     fun onScreenEntered(isFromActiveSession: Boolean) {
         _uiState.update { it.copy(isFromActiveSession = isFromActiveSession) }
         if (isFromActiveSession) {
+            sessionSaveAttempted = false
+            val draft = SessionReportDraftStore.consume()
+            if (draft != null) {
+                _uiState.update {
+                    it.copy(
+                        totalFocusMinutes = draft.totalFocusMinutes,
+                        avgEnvironmentScore = draft.avgEnvironmentScore,
+                        avgNoise = draft.avgNoise,
+                        avgIlluminance = draft.avgIlluminance,
+                        avgVibration = draft.avgVibration,
+                        focusTimeline = draft.focusTimeline,
+                        placeName = draft.placeName,
+                        placeLatitude = draft.placeLatitude,
+                        placeLongitude = draft.placeLongitude,
+                        sessionSaved = false,
+                        errorMessage = null,
+                    )
+                }
+            } else {
+                _uiState.update {
+                    it.copy(
+                        errorMessage = "세션 실측 데이터를 찾지 못했어요. 다시 세션을 진행해 주세요.",
+                    )
+                }
+            }
             saveSessionRecordIfNeeded()
         } else {
             loadHistory()
@@ -74,6 +91,12 @@ class SessionReportViewModel(
 
     fun saveSessionRecordIfNeeded() {
         if (sessionSaveAttempted) return
+
+        val stateBeforeSave = _uiState.value
+        if (stateBeforeSave.totalFocusMinutes <= 0 && stateBeforeSave.focusTimeline.isEmpty()) {
+            return
+        }
+
         sessionSaveAttempted = true
 
         viewModelScope.launch {

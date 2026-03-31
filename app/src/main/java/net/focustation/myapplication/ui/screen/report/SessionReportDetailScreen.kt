@@ -2,6 +2,7 @@ package net.focustation.myapplication.ui.screen.report
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -29,9 +30,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import net.focustation.myapplication.data.repository.FirestoreStudyRepository
 import net.focustation.myapplication.data.repository.StudySessionRecord
+import net.focustation.myapplication.ui.components.MiniLineGraph
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -102,6 +105,7 @@ fun SessionReportDetailScreen(
 
                 record != null -> {
                     val session = record ?: return@Column
+                    FocusTimelineCard(session = session)
                     DetailItemCard("장소", session.placeName)
                     DetailItemCard("세션 종료 시각", formatDate(session.endedAtEpochMillis))
                     DetailItemCard("집중 점수", "${session.focusScoreAvg.toInt()}점")
@@ -116,6 +120,55 @@ fun SessionReportDetailScreen(
             }
         }
     }
+}
+
+@Composable
+private fun FocusTimelineCard(session: StudySessionRecord) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Text(
+                text = "세션 중 환경 점수 추이",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+            )
+            Spacer(Modifier.height(10.dp))
+
+            val timeline = session.focusTimeline
+            if (timeline.size >= 2) {
+                MiniLineGraph(
+                    dataPoints = timeline.map { it.focusScore },
+                    minValue = 0f,
+                    maxValue = 100f,
+                    modifier = Modifier.fillMaxWidth().height(100.dp),
+                )
+                Spacer(Modifier.height(6.dp))
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = timeline.first().timeLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = timeline.last().timeLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.End,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            } else {
+                Text(
+                    text = "그래프로 보여줄 타임라인 데이터가 부족해요.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+    Spacer(Modifier.height(8.dp))
 }
 
 @Composable
