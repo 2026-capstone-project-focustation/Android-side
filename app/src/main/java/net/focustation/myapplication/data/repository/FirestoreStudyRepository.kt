@@ -5,6 +5,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
 import net.focustation.myapplication.data.model.FocusDataPoint
 import net.focustation.myapplication.util.DebugLog
@@ -112,6 +113,12 @@ class FirestoreStudyRepository(
             val uid = auth.currentUser?.uid ?: error("로그인 후 장소를 저장할 수 있어요.")
             if (request.name.isBlank()) error("장소 이름이 비어 있어요.")
             val placeId = buildStablePlaceId(request)
+            val placeRef =
+                firestore
+                    .collection("users")
+                    .document(uid)
+                    .collection("savedPlaces")
+                    .document(placeId)
             DebugLog.d(
                 "[Firestore][장소저장][요청] uid=${uidForLog(uid)}, placeId=$placeId, name=${request.name}",
             )
@@ -121,15 +128,14 @@ class FirestoreStudyRepository(
                     "latitude" to request.latitude,
                     "longitude" to request.longitude,
                     "updatedAt" to FieldValue.serverTimestamp(),
-                    "createdAt" to FieldValue.serverTimestamp(),
                 )
+            val exists = placeRef.get().await().exists()
+            if (!exists) {
+                placePayload["createdAt"] = FieldValue.serverTimestamp()
+            }
 
-            firestore
-                .collection("users")
-                .document(uid)
-                .collection("savedPlaces")
-                .document(placeId)
-                .set(placePayload)
+            placeRef
+                .set(placePayload, SetOptions.merge())
                 .await()
             DebugLog.d("[Firestore][장소저장][성공] uid=${uidForLog(uid)}, placeId=$placeId")
         }.onFailure { error ->
@@ -145,6 +151,7 @@ class FirestoreStudyRepository(
                     .collection("users")
                     .document(uid)
                     .collection("sessions")
+                    .whereEqualTo("isDeleted", false)
                     .orderBy("endedAt", Query.Direction.DESCENDING)
                     .limit(limit)
                     .get()
@@ -152,7 +159,6 @@ class FirestoreStudyRepository(
 
             val records =
                 snapshot.documents
-                    .filterNot { doc -> doc.getBoolean("isDeleted") == true }
                     .map { doc ->
                         val placeSnapshot = doc.get("placeSnapshot") as? Map<*, *>
                         StudySessionRecord(
