@@ -19,6 +19,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import net.focustation.myapplication.ui.components.EnvironmentSnapshotRow
+import net.focustation.myapplication.ui.components.MainBottomDestination
+import net.focustation.myapplication.ui.components.MainBottomNavigationBar
 import net.focustation.myapplication.ui.components.SessionSummaryCard
 import net.focustation.myapplication.ui.theme.ColorFocus
 import net.focustation.myapplication.ui.theme.FocustationTheme
@@ -46,32 +48,17 @@ fun DashboardScreen(
 
     Scaffold(
         bottomBar = {
-            NavigationBar(tonalElevation = 6.dp) {
-                NavigationBarItem(
-                    selected = true,
-                    onClick = {},
-                    icon = { Text("🏠", fontSize = 20.sp) },
-                    label = { Text("홈") },
-                )
-                NavigationBarItem(
-                    selected = false,
-                    onClick = onNavigateToReport,
-                    icon = { Text("📊", fontSize = 20.sp) },
-                    label = { Text("리포트") },
-                )
-                NavigationBarItem(
-                    selected = false,
-                    onClick = onNavigateToSpaceHistory,
-                    icon = { Text("🗺️", fontSize = 20.sp) },
-                    label = { Text("지도") },
-                )
-                NavigationBarItem(
-                    selected = false,
-                    onClick = onNavigateToSettings,
-                    icon = { Text("⚙️", fontSize = 20.sp) },
-                    label = { Text("설정") },
-                )
-            }
+            MainBottomNavigationBar(
+                selected = MainBottomDestination.HOME,
+                onTabClick = { destination ->
+                    when (destination) {
+                        MainBottomDestination.HOME -> Unit
+                        MainBottomDestination.REPORT -> onNavigateToReport()
+                        MainBottomDestination.MAP -> onNavigateToSpaceHistory()
+                        MainBottomDestination.SETTINGS -> onNavigateToSettings()
+                    }
+                },
+            )
         },
     ) { paddingValues ->
         LazyColumn(

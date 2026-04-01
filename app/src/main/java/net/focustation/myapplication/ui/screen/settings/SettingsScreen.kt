@@ -16,6 +16,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import net.focustation.myapplication.ui.components.MainBottomDestination
+import net.focustation.myapplication.ui.components.MainBottomNavigationBar
 import net.focustation.myapplication.ui.theme.FocustationTheme
 import net.focustation.myapplication.ui.theme.Primary40
 
@@ -23,11 +25,27 @@ import net.focustation.myapplication.ui.theme.Primary40
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
+    onNavigateToHome: () -> Unit = {},
+    onNavigateToReport: () -> Unit = {},
+    onNavigateToSpaceHistory: () -> Unit = {},
     viewModel: SettingsViewModel = viewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
     Scaffold(
+        bottomBar = {
+            MainBottomNavigationBar(
+                selected = MainBottomDestination.SETTINGS,
+                onTabClick = { destination ->
+                    when (destination) {
+                        MainBottomDestination.HOME -> onNavigateToHome()
+                        MainBottomDestination.REPORT -> onNavigateToReport()
+                        MainBottomDestination.MAP -> onNavigateToSpaceHistory()
+                        MainBottomDestination.SETTINGS -> Unit
+                    }
+                },
+            )
+        },
         topBar = {
             TopAppBar(
                 title = { Text("설정", fontWeight = FontWeight.Bold) },

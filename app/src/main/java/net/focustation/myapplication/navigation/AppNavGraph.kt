@@ -19,6 +19,8 @@ import net.focustation.myapplication.ui.screen.space.SpaceHistoryScreen
 
 @Composable
 fun AppNavGraph(navController: NavHostController) {
+    val reportTabRoute = NavRoute.SessionReport.createRoute(false)
+
     NavHost(
         navController = navController,
         startDestination = NavRoute.Login.route,
@@ -46,9 +48,9 @@ fun AppNavGraph(navController: NavHostController) {
         composable(NavRoute.Dashboard.route) {
             DashboardScreen(
                 onStartSession = { navController.navigate(NavRoute.EnvironmentSession.route) },
-                onNavigateToReport = { navController.navigate(NavRoute.SessionReport.createRoute(false)) },
-                onNavigateToSpaceHistory = { navController.navigate(NavRoute.SpaceHistory.route) },
-                onNavigateToSettings = { navController.navigate(NavRoute.Settings.route) },
+                onNavigateToReport = { navController.navigateToMainTab(reportTabRoute) },
+                onNavigateToSpaceHistory = { navController.navigateToMainTab(NavRoute.SpaceHistory.route) },
+                onNavigateToSettings = { navController.navigateToMainTab(NavRoute.Settings.route) },
             )
         }
 
@@ -98,6 +100,15 @@ fun AppNavGraph(navController: NavHostController) {
                 onHistoryItemClick = { sessionId ->
                     navController.navigate(NavRoute.SessionReportDetail.createRoute(sessionId))
                 },
+                onNavigateToHome = {
+                    navController.navigateToMainTab(NavRoute.Dashboard.route)
+                },
+                onNavigateToSpaceHistory = {
+                    navController.navigateToMainTab(NavRoute.SpaceHistory.route)
+                },
+                onNavigateToSettings = {
+                    navController.navigateToMainTab(NavRoute.Settings.route)
+                },
                 onBack = {
                     navController.navigate(NavRoute.Dashboard.route) {
                         popUpTo(NavRoute.Dashboard.route) { inclusive = true }
@@ -127,13 +138,42 @@ fun AppNavGraph(navController: NavHostController) {
         composable(NavRoute.SpaceHistory.route) {
             SpaceHistoryScreen(
                 onBack = { navController.popBackStack() },
+                onNavigateToHome = {
+                    navController.navigateToMainTab(NavRoute.Dashboard.route)
+                },
+                onNavigateToReport = {
+                    navController.navigateToMainTab(reportTabRoute)
+                },
+                onNavigateToSettings = {
+                    navController.navigateToMainTab(NavRoute.Settings.route)
+                },
             )
         }
 
         composable(NavRoute.Settings.route) {
             SettingsScreen(
                 onBack = { navController.popBackStack() },
+                onNavigateToHome = {
+                    navController.navigateToMainTab(NavRoute.Dashboard.route)
+                },
+                onNavigateToReport = {
+                    navController.navigateToMainTab(reportTabRoute)
+                },
+                onNavigateToSpaceHistory = {
+                    navController.navigateToMainTab(NavRoute.SpaceHistory.route)
+                },
             )
+        }
+    }
+}
+
+private fun NavHostController.navigateToMainTab(route: String) {
+    navigate(route) {
+        // 하단 탭은 동일 목적지 중복을 막고 상태를 최대한 복원한다.
+        launchSingleTop = true
+        restoreState = true
+        popUpTo(NavRoute.Dashboard.route) {
+            saveState = true
         }
     }
 }

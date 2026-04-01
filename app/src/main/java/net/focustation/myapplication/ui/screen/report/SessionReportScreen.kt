@@ -42,6 +42,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import net.focustation.myapplication.ui.components.MainBottomDestination
+import net.focustation.myapplication.ui.components.MainBottomNavigationBar
 import net.focustation.myapplication.ui.components.SessionSummaryCard
 import net.focustation.myapplication.ui.theme.ColorFocus
 import net.focustation.myapplication.ui.theme.FocustationTheme
@@ -56,6 +58,9 @@ fun SessionReportScreen(
     onBack: () -> Unit,
     onRetry: () -> Unit,
     onHistoryItemClick: (String) -> Unit,
+    onNavigateToHome: () -> Unit = {},
+    onNavigateToSpaceHistory: () -> Unit = {},
+    onNavigateToSettings: () -> Unit = {},
     isFromActiveSession: Boolean = false,
     viewModel: SessionReportViewModel = viewModel(),
 ) {
@@ -66,6 +71,19 @@ fun SessionReportScreen(
     }
 
     Scaffold(
+        bottomBar = {
+            MainBottomNavigationBar(
+                selected = MainBottomDestination.REPORT,
+                onTabClick = { destination ->
+                    when (destination) {
+                        MainBottomDestination.HOME -> onNavigateToHome()
+                        MainBottomDestination.REPORT -> Unit
+                        MainBottomDestination.MAP -> onNavigateToSpaceHistory()
+                        MainBottomDestination.SETTINGS -> onNavigateToSettings()
+                    }
+                },
+            )
+        },
         topBar = {
             TopAppBar(
                 title = { Text("공부 리포트", fontWeight = FontWeight.Bold) },
