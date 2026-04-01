@@ -186,14 +186,56 @@ fun DashboardScreen(
                 }
             }
 
-            items(uiState.recentSessions) { session ->
-                Box(modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
-                    SessionSummaryCard(
-                        date = session.date,
-                        place = session.place,
-                        focusScore = session.focusScore,
-                        durationMin = session.totalMinutes,
-                    )
+            when {
+                uiState.isLoading -> {
+                    item {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    }
+                }
+
+                uiState.recentSessions.isEmpty() -> {
+                    item {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                            horizontalAlignment = Alignment.Start,
+                        ) {
+                            Text(
+                                text = "최근 세션 데이터가 아직 없어요.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            if (!uiState.errorMessage.isNullOrBlank()) {
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    text = uiState.errorMessage.orEmpty(),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                OutlinedButton(onClick = viewModel::refresh) {
+                                    Text("다시 시도")
+                                }
+                            }
+                        }
+                    }
+                }
+
+                else -> {
+                    items(uiState.recentSessions) { session ->
+                        Box(modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
+                            SessionSummaryCard(
+                                date = session.date,
+                                place = session.place,
+                                focusScore = session.focusScore,
+                                durationMin = session.totalMinutes,
+                            )
+                        }
+                    }
                 }
             }
         }
