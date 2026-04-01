@@ -85,6 +85,9 @@ class FirestoreStudyRepository(
                             "latitude" to request.latitude,
                             "longitude" to request.longitude,
                         ),
+                    // 소프트 삭제 기본값: 신규 문서는 항상 표시 상태로 저장
+                    "isDeleted" to false,
+                    "deletedAt" to null,
                     "createdAt" to FieldValue.serverTimestamp(),
                     "updatedAt" to FieldValue.serverTimestamp(),
                 )
@@ -148,20 +151,22 @@ class FirestoreStudyRepository(
                     .await()
 
             val records =
-                snapshot.documents.map { doc ->
-                    val placeSnapshot = doc.get("placeSnapshot") as? Map<*, *>
-                    StudySessionRecord(
-                        sessionId = doc.getString("sessionId") ?: doc.id,
-                        endedAtEpochMillis = doc.getTimestamp("endedAt")?.toDate()?.time ?: 0L,
-                        durationSec = doc.getLong("durationSec")?.toInt() ?: 0,
-                        focusScoreAvg = (doc.getDouble("focusScoreAvg") ?: 0.0).toFloat(),
-                        avgNoise = (doc.getDouble("avgNoise") ?: 0.0).toFloat(),
-                        avgIlluminance = (doc.getDouble("avgIlluminance") ?: 0.0).toFloat(),
-                        avgVibration = doc.getDouble("avgVibration") ?: 0.0,
-                        placeName = placeSnapshot?.get("name") as? String ?: "장소 미지정",
-                        focusTimeline = parseFocusTimeline(doc.get("focusTimeline")),
-                    )
-                }
+                snapshot.documents
+                    .filterNot { doc -> doc.getBoolean("isDeleted") == true }
+                    .map { doc ->
+                        val placeSnapshot = doc.get("placeSnapshot") as? Map<*, *>
+                        StudySessionRecord(
+                            sessionId = doc.getString("sessionId") ?: doc.id,
+                            endedAtEpochMillis = doc.getTimestamp("endedAt")?.toDate()?.time ?: 0L,
+                            durationSec = doc.getLong("durationSec")?.toInt() ?: 0,
+                            focusScoreAvg = (doc.getDouble("focusScoreAvg") ?: 0.0).toFloat(),
+                            avgNoise = (doc.getDouble("avgNoise") ?: 0.0).toFloat(),
+                            avgIlluminance = (doc.getDouble("avgIlluminance") ?: 0.0).toFloat(),
+                            avgVibration = doc.getDouble("avgVibration") ?: 0.0,
+                            placeName = placeSnapshot?.get("name") as? String ?: "장소 미지정",
+                            focusTimeline = parseFocusTimeline(doc.get("focusTimeline")),
+                        )
+                    }
             DebugLog.d("[Firestore][목록조회][성공] uid=${uidForLog(uid)}, count=${records.size}")
             records
         }.onFailure { error ->
@@ -181,7 +186,9 @@ class FirestoreStudyRepository(
                     .get()
                     .await()
 
-            if (!document.exists()) error("선택한 세션 기록을 찾을 수 없어요.")
+            if (!document.exists() || document.getBoolean("isDeleted") == true) {
+                error("선택한 세션 기록을 찾을 수 없어요.")
+            }
 
             val placeSnapshot = document.get("placeSnapshot") as? Map<*, *>
             val record =
@@ -215,9 +222,14 @@ class FirestoreStudyRepository(
                 .document(uid)
                 .collection("sessions")
                 .document(sessionId)
-                .delete()
-                .await()
-            DebugLog.d("[Firestore][삭제][성공] uid=${uidForLog(uid)}, sessionId=$sessionId")
+                .update(
+                    mapOf(
+                        "isDeleted" to true,
+                        "deletedAt" to FieldValue.serverTimestamp(),
+                        "updatedAt" to FieldValue.serverTimestamp(),
+                    ),
+                ).await()
+            DebugLog.d("[Firestore][삭제][성공] uid=${uidForLog(uid)}, sessionId=$sessionId, 방식=소프트삭제")
         }.onFailure { error ->
             DebugLog.e("[Firestore][삭제][실패] sessionId=$sessionId, ${error.message}", error)
         }

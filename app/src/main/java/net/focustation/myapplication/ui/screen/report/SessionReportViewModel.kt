@@ -42,6 +42,7 @@ data class SessionReportUiState(
     val isLoadingHistory: Boolean = false,
     val history: List<StudyHistoryUiItem> = emptyList(),
     val historyErrorMessage: String? = null,
+    val deletingSessionIds: Set<String> = emptySet(),
 )
 
 class SessionReportViewModel(
@@ -51,7 +52,6 @@ class SessionReportViewModel(
     val uiState: StateFlow<SessionReportUiState> = _uiState.asStateFlow()
 
     private var sessionSaveAttempted = false
-    private val hiddenSessionIds = mutableSetOf<String>()
 
     init {
         loadHistory()
@@ -201,12 +201,38 @@ class SessionReportViewModel(
     }
 
     fun hideHistoryItem(sessionId: String) {
-        hiddenSessionIds.add(sessionId)
-        DebugLog.d("[리포트][숨김] sessionId=$sessionId")
-        _uiState.update { state ->
-            state.copy(
-                history = state.history.filterNot { it.sessionId == sessionId },
-                errorMessage = "기록을 숨겼어요. (Firestore 삭제 아님)",
+        if (_uiState.value.deletingSessionIds.contains(sessionId)) return
+
+        viewModelScope.launch {
+            DebugLog.d("[리포트][삭제] 시작 sessionId=$sessionId")
+            _uiState.update { state ->
+                state.copy(
+                    deletingSessionIds = state.deletingSessionIds + sessionId,
+                    errorMessage = null,
+                )
+            }
+
+            val result = repository.deleteStudySession(sessionId)
+            result.fold(
+                onSuccess = {
+                    DebugLog.d("[리포트][삭제] 성공 sessionId=$sessionId")
+                    _uiState.update { state ->
+                        state.copy(
+                            deletingSessionIds = state.deletingSessionIds - sessionId,
+                            history = state.history.filterNot { it.sessionId == sessionId },
+                            errorMessage = "기록을 삭제했어요. (Firestore에는 삭제 표시로 보관돼요)",
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    DebugLog.e("[리포트][삭제] 실패 sessionId=$sessionId, ${error.message}", error)
+                    _uiState.update { state ->
+                        state.copy(
+                            deletingSessionIds = state.deletingSessionIds - sessionId,
+                            errorMessage = error.message ?: "기록 삭제에 실패했어요.",
+                        )
+                    }
+                },
             )
         }
     }
@@ -219,11 +245,11 @@ class SessionReportViewModel(
             result.fold(
                 onSuccess = { records ->
                     val mapped = records.map(::toUiItem)
-                    DebugLog.d("[리포트][목록조회] 성공: 원본=${mapped.size}개, 숨김=${hiddenSessionIds.size}개")
+                    DebugLog.d("[리포트][목록조회] 성공: ${mapped.size}개")
                     _uiState.update {
                         it.copy(
                             isLoadingHistory = false,
-                            history = mapped.filterNot { item -> hiddenSessionIds.contains(item.sessionId) },
+                            history = mapped,
                             historyErrorMessage = null,
                         )
                     }

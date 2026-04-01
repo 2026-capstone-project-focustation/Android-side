@@ -174,9 +174,16 @@ fun SessionReportScreen(
                             )
                             OutlinedButton(
                                 onClick = { viewModel.hideHistoryItem(item.sessionId) },
+                                enabled = !uiState.deletingSessionIds.contains(item.sessionId),
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
                             ) {
-                                Text("숨기기")
+                                Text(
+                                    if (uiState.deletingSessionIds.contains(item.sessionId)) {
+                                        "삭제 중..."
+                                    } else {
+                                        "삭제"
+                                    },
+                                )
                             }
                         }
                         Spacer(Modifier.height(8.dp))
