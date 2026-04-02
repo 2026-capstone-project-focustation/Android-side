@@ -43,6 +43,7 @@ data class SessionReportUiState(
     val history: List<StudyHistoryUiItem> = emptyList(),
     val historyErrorMessage: String? = null,
     val deletingSessionIds: Set<String> = emptySet(),
+    val deleteFeedbackMessage: String? = null,
 )
 
 class SessionReportViewModel(
@@ -209,6 +210,7 @@ class SessionReportViewModel(
                 state.copy(
                     deletingSessionIds = state.deletingSessionIds + sessionId,
                     errorMessage = null,
+                    deleteFeedbackMessage = null,
                 )
             }
 
@@ -220,21 +222,35 @@ class SessionReportViewModel(
                         state.copy(
                             deletingSessionIds = state.deletingSessionIds - sessionId,
                             history = state.history.filterNot { it.sessionId == sessionId },
-                            errorMessage = "기록을 삭제했어요. (Firestore에는 삭제 표시로 보관돼요)",
+                            deleteFeedbackMessage = "기록을 숨김 처리했어요. (Firestore에는 보관돼요)",
                         )
                     }
                 },
                 onFailure = { error ->
                     DebugLog.e("[리포트][삭제] 실패 sessionId=$sessionId, ${error.message}", error)
+                    val message =
+                        when (error.message) {
+                            "삭제할 기록을 찾을 수 없어요." -> "이미 없는 기록이에요. 목록을 새로고침해 주세요."
+                            "이미 삭제된 기록이에요." -> "이미 숨김 처리된 기록이에요."
+                            else -> error.message ?: "기록 삭제에 실패했어요."
+                        }
                     _uiState.update { state ->
                         state.copy(
                             deletingSessionIds = state.deletingSessionIds - sessionId,
-                            errorMessage = error.message ?: "기록 삭제에 실패했어요.",
+                            deleteFeedbackMessage = message,
                         )
                     }
                 },
             )
         }
+    }
+
+    fun refreshHistory() {
+        loadHistory()
+    }
+
+    fun consumeDeleteFeedbackMessage() {
+        _uiState.update { it.copy(deleteFeedbackMessage = null) }
     }
 
     private fun loadHistory() {

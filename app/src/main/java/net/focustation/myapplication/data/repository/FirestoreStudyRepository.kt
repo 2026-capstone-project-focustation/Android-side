@@ -4,6 +4,7 @@ import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
@@ -146,19 +147,32 @@ class FirestoreStudyRepository(
         runCatching {
             val uid = auth.currentUser?.uid ?: error("로그인 후 기록을 불러올 수 있어요.")
             DebugLog.d("[Firestore][목록조회][요청] uid=${uidForLog(uid)}, limit=$limit")
-            val snapshot =
+            val sessionsRef =
                 firestore
                     .collection("users")
                     .document(uid)
                     .collection("sessions")
-                    .whereEqualTo("isDeleted", false)
-                    .orderBy("endedAt", Query.Direction.DESCENDING)
-                    .limit(limit)
-                    .get()
-                    .await()
+            val snapshot =
+                try {
+                    sessionsRef
+                        .whereEqualTo("isDeleted", false)
+                        .orderBy("endedAt", Query.Direction.DESCENDING)
+                        .limit(limit)
+                        .get()
+                        .await()
+                } catch (error: Exception) {
+                    if (!isMissingIndexError(error)) throw error
+                    DebugLog.w("[Firestore][목록조회][인덱스없음] 서버 인덱스 생성 전까지 폴백 쿼리로 조회합니다.")
+                    sessionsRef
+                        .orderBy("endedAt", Query.Direction.DESCENDING)
+                        .limit(limit)
+                        .get()
+                        .await()
+                }
 
             val records =
                 snapshot.documents
+                    .filterNot { doc -> doc.getBoolean("isDeleted") == true }
                     .map { doc ->
                         val placeSnapshot = doc.get("placeSnapshot") as? Map<*, *>
                         StudySessionRecord(
@@ -223,11 +237,24 @@ class FirestoreStudyRepository(
         runCatching {
             val uid = auth.currentUser?.uid ?: error("로그인 후 기록을 삭제할 수 있어요.")
             DebugLog.d("[Firestore][삭제][요청] uid=${uidForLog(uid)}, sessionId=$sessionId")
-            firestore
-                .collection("users")
-                .document(uid)
-                .collection("sessions")
-                .document(sessionId)
+            val sessionRef =
+                firestore
+                    .collection("users")
+                    .document(uid)
+                    .collection("sessions")
+                    .document(sessionId)
+
+            val snapshot = sessionRef.get().await()
+            if (!snapshot.exists()) {
+                DebugLog.d("[Firestore][삭제][문서없음] uid=${uidForLog(uid)}, sessionId=$sessionId")
+                error("삭제할 기록을 찾을 수 없어요.")
+            }
+            if (snapshot.getBoolean("isDeleted") == true) {
+                DebugLog.d("[Firestore][삭제][이미삭제] uid=${uidForLog(uid)}, sessionId=$sessionId")
+                error("이미 삭제된 기록이에요.")
+            }
+
+            sessionRef
                 .update(
                     mapOf(
                         "isDeleted" to true,
@@ -235,7 +262,7 @@ class FirestoreStudyRepository(
                         "updatedAt" to FieldValue.serverTimestamp(),
                     ),
                 ).await()
-            DebugLog.d("[Firestore][삭제][성공] uid=${uidForLog(uid)}, sessionId=$sessionId, 방식=소프트삭제")
+            DebugLog.d("[Firestore][삭제][소프트삭제성공] uid=${uidForLog(uid)}, sessionId=$sessionId")
         }.onFailure { error ->
             DebugLog.e("[Firestore][삭제][실패] sessionId=$sessionId, ${error.message}", error)
         }
@@ -261,8 +288,15 @@ class FirestoreStudyRepository(
         val lat = request.latitude?.let { "%.4f".format(Locale.ROOT, it) } ?: "na"
         val lon = request.longitude?.let { "%.4f".format(Locale.ROOT, it) } ?: "na"
         val raw = "$normalizedName|$lat|$lon"
-        return "place_${abs(raw.hashCode())}"
+        return "place_${abs(raw.hashCode().toLong())}"
     }
 
     private fun uidForLog(uid: String): String = if (uid.length <= 6) uid else "${uid.take(6)}..."
+
+    private fun isMissingIndexError(error: Throwable): Boolean {
+        val firestoreError = error as? FirebaseFirestoreException ?: return false
+        if (firestoreError.code != FirebaseFirestoreException.Code.FAILED_PRECONDITION) return false
+        val message = firestoreError.message?.lowercase(Locale.ROOT).orEmpty()
+        return message.contains("requires an index") || message.contains("create it here")
+    }
 }
