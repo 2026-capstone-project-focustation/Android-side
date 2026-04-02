@@ -81,6 +81,8 @@ dependencies {
     implementation(libs.playServicesAuth)
     implementation(platform(libs.firebaseBom))
     implementation(libs.firebaseAuth)
+    implementation(libs.firebase.firestore)
+    implementation(libs.kotlinx.coroutines.play.services)
     implementation("androidx.appcompat:appcompat:1.6.1")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

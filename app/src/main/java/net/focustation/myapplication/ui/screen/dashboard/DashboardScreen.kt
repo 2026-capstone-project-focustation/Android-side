@@ -19,6 +19,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import net.focustation.myapplication.ui.components.EnvironmentSnapshotRow
+import net.focustation.myapplication.ui.components.MainBottomDestination
+import net.focustation.myapplication.ui.components.MainBottomNavigationBar
 import net.focustation.myapplication.ui.components.SessionSummaryCard
 import net.focustation.myapplication.ui.theme.ColorFocus
 import net.focustation.myapplication.ui.theme.FocustationTheme
@@ -37,6 +39,7 @@ import net.focustation.myapplication.ui.theme.Primary40
 @Composable
 fun DashboardScreen(
     onStartSession: () -> Unit,
+    onNavigateToReport: () -> Unit,
     onNavigateToSpaceHistory: () -> Unit,
     onNavigateToSettings: () -> Unit,
     viewModel: DashboardViewModel = viewModel(),
@@ -45,32 +48,17 @@ fun DashboardScreen(
 
     Scaffold(
         bottomBar = {
-            NavigationBar(tonalElevation = 6.dp) {
-                NavigationBarItem(
-                    selected = true,
-                    onClick = {},
-                    icon = { Text("🏠", fontSize = 20.sp) },
-                    label = { Text("홈") },
-                )
-                NavigationBarItem(
-                    selected = false,
-                    onClick = {},
-                    icon = { Text("📊", fontSize = 20.sp) },
-                    label = { Text("리포트") },
-                )
-                NavigationBarItem(
-                    selected = false,
-                    onClick = onNavigateToSpaceHistory,
-                    icon = { Text("🗺️", fontSize = 20.sp) },
-                    label = { Text("지도") },
-                )
-                NavigationBarItem(
-                    selected = false,
-                    onClick = onNavigateToSettings,
-                    icon = { Text("⚙️", fontSize = 20.sp) },
-                    label = { Text("설정") },
-                )
-            }
+            MainBottomNavigationBar(
+                selected = MainBottomDestination.HOME,
+                onTabClick = { destination ->
+                    when (destination) {
+                        MainBottomDestination.HOME -> Unit
+                        MainBottomDestination.REPORT -> onNavigateToReport()
+                        MainBottomDestination.MAP -> onNavigateToSpaceHistory()
+                        MainBottomDestination.SETTINGS -> onNavigateToSettings()
+                    }
+                },
+            )
         },
     ) { paddingValues ->
         LazyColumn(
@@ -185,14 +173,56 @@ fun DashboardScreen(
                 }
             }
 
-            items(uiState.recentSessions) { session ->
-                Box(modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
-                    SessionSummaryCard(
-                        date = session.date,
-                        place = session.place,
-                        focusScore = session.focusScore,
-                        durationMin = session.totalMinutes,
-                    )
+            when {
+                uiState.isLoading -> {
+                    item {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    }
+                }
+
+                uiState.recentSessions.isEmpty() -> {
+                    item {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                            horizontalAlignment = Alignment.Start,
+                        ) {
+                            Text(
+                                text = "최근 세션 데이터가 아직 없어요.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            if (!uiState.errorMessage.isNullOrBlank()) {
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    text = uiState.errorMessage.orEmpty(),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                OutlinedButton(onClick = viewModel::refresh) {
+                                    Text("다시 시도")
+                                }
+                            }
+                        }
+                    }
+                }
+
+                else -> {
+                    items(uiState.recentSessions) { session ->
+                        Box(modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
+                            SessionSummaryCard(
+                                date = session.date,
+                                place = session.place,
+                                focusScore = session.focusScore,
+                                durationMin = session.totalMinutes,
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -257,6 +287,7 @@ private fun DashboardPreview() {
     FocustationTheme {
         DashboardScreen(
             onStartSession = {},
+            onNavigateToReport = {},
             onNavigateToSpaceHistory = {},
             onNavigateToSettings = {},
         )
