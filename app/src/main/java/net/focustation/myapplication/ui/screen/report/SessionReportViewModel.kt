@@ -1,36 +1,295 @@
 package net.focustation.myapplication.ui.screen.report
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import net.focustation.myapplication.data.model.FocusDataPoint
+import net.focustation.myapplication.data.repository.FirestoreStudyRepository
+import net.focustation.myapplication.data.repository.SavedPlaceRequest
+import net.focustation.myapplication.data.repository.StudySessionRecord
+import net.focustation.myapplication.data.repository.StudySessionSaveRequest
+import net.focustation.myapplication.session.SessionReportDraftStore
+import net.focustation.myapplication.util.DebugLog
 
-data class SessionReportUiState(
-    val totalFocusMinutes: Int = 90,
-    val avgEnvironmentScore: Float = 0f,
-    val avgNoise: Float = 38.5f,
-    val avgIlluminance: Float = 430f,
-    val avgVibration: Double = 0.0,
-    val focusTimeline: List<FocusDataPoint> =
-        listOf(
-            FocusDataPoint("0분", 70f),
-            FocusDataPoint("15분", 80f),
-            FocusDataPoint("30분", 86f),
-            FocusDataPoint("45분", 76f),
-            FocusDataPoint("60분", 90f),
-            FocusDataPoint("75분", 84f),
-            FocusDataPoint("90분", 92f),
-        ),
-    val placeSaved: Boolean = false,
-    val isFromActiveSession: Boolean = true,
+data class StudyHistoryUiItem(
+    val sessionId: String,
+    val placeName: String,
+    val focusScore: Int,
+    val durationMinutes: Int,
+    val endedAtEpochMillis: Long,
 )
 
-class SessionReportViewModel : ViewModel() {
+data class SessionReportUiState(
+    val totalFocusMinutes: Int = 0,
+    val avgEnvironmentScore: Float = 0f,
+    val avgNoise: Float = 0f,
+    val avgIlluminance: Float = 0f,
+    val avgVibration: Double = 0.0,
+    val focusTimeline: List<FocusDataPoint> = emptyList(),
+    val placeSaved: Boolean = false,
+    val isFromActiveSession: Boolean = true,
+    val placeName: String = "",
+    val placeLatitude: Double? = null,
+    val placeLongitude: Double? = null,
+    val isSavingSession: Boolean = false,
+    val isSavingPlace: Boolean = false,
+    val sessionSaved: Boolean = false,
+    val errorMessage: String? = null,
+    val isLoadingHistory: Boolean = false,
+    val history: List<StudyHistoryUiItem> = emptyList(),
+    val historyErrorMessage: String? = null,
+    val deletingSessionIds: Set<String> = emptySet(),
+    val deleteFeedbackMessage: String? = null,
+)
+
+class SessionReportViewModel(
+    private val repository: FirestoreStudyRepository = FirestoreStudyRepository(),
+) : ViewModel() {
     private val _uiState = MutableStateFlow(SessionReportUiState())
     val uiState: StateFlow<SessionReportUiState> = _uiState.asStateFlow()
 
-    fun savePlace() {
-        _uiState.value = _uiState.value.copy(placeSaved = true)
+    private var sessionSaveAttempted = false
+
+    init {
+        loadHistory()
     }
+
+    fun onScreenEntered(isFromActiveSession: Boolean) {
+        DebugLog.d("[리포트][진입] fromSession=$isFromActiveSession")
+        _uiState.update { it.copy(isFromActiveSession = isFromActiveSession) }
+        if (isFromActiveSession) {
+            sessionSaveAttempted = false
+            val draft = SessionReportDraftStore.consume()
+            if (draft != null) {
+                DebugLog.d(
+                    "[리포트][draft] 소비 성공: 분=${draft.totalFocusMinutes}, 타임라인=${draft.focusTimeline.size}개",
+                )
+                _uiState.update {
+                    it.copy(
+                        totalFocusMinutes = draft.totalFocusMinutes,
+                        avgEnvironmentScore = draft.avgEnvironmentScore,
+                        avgNoise = draft.avgNoise,
+                        avgIlluminance = draft.avgIlluminance,
+                        avgVibration = draft.avgVibration,
+                        focusTimeline = draft.focusTimeline,
+                        placeName = draft.placeName,
+                        placeLatitude = draft.placeLatitude,
+                        placeLongitude = draft.placeLongitude,
+                        sessionSaved = false,
+                        errorMessage = null,
+                    )
+                }
+            } else {
+                DebugLog.w("[리포트][draft] 소비 실패: 저장된 draft 없음")
+                _uiState.update {
+                    it.copy(
+                        errorMessage = "세션 실측 데이터를 찾지 못했어요. 다시 세션을 진행해 주세요.",
+                    )
+                }
+            }
+            saveSessionRecordIfNeeded()
+        } else {
+            loadHistory()
+        }
+    }
+
+    fun saveSessionRecordIfNeeded() {
+        if (sessionSaveAttempted) {
+            DebugLog.d("[리포트][저장] 스킵: 이미 저장 시도함")
+            return
+        }
+
+        val stateBeforeSave = _uiState.value
+        if (stateBeforeSave.totalFocusMinutes <= 0 && stateBeforeSave.focusTimeline.isEmpty()) {
+            DebugLog.w("[리포트][저장] 스킵: 저장할 세션 데이터가 없음")
+            return
+        }
+
+        DebugLog.d(
+            "[리포트][저장] 시작: 분=${stateBeforeSave.totalFocusMinutes}, 타임라인=${stateBeforeSave.focusTimeline.size}개",
+        )
+        sessionSaveAttempted = true
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSavingSession = true, errorMessage = null) }
+            val state = _uiState.value
+            val result =
+                repository.saveStudySession(
+                    StudySessionSaveRequest(
+                        totalFocusMinutes = state.totalFocusMinutes,
+                        avgEnvironmentScore = state.avgEnvironmentScore,
+                        avgNoise = state.avgNoise,
+                        avgIlluminance = state.avgIlluminance,
+                        avgVibration = state.avgVibration,
+                        focusTimeline = state.focusTimeline,
+                        placeName = state.placeName,
+                        latitude = state.placeLatitude,
+                        longitude = state.placeLongitude,
+                    ),
+                )
+
+            result.fold(
+                onSuccess = {
+                    DebugLog.d("[리포트][저장] 성공")
+                    _uiState.update {
+                        it.copy(
+                            isSavingSession = false,
+                            sessionSaved = true,
+                            errorMessage = null,
+                        )
+                    }
+                    loadHistory()
+                },
+                onFailure = { error ->
+                    DebugLog.e("[리포트][저장] 실패: ${error.message}", error)
+                    _uiState.update {
+                        it.copy(
+                            isSavingSession = false,
+                            errorMessage = error.message ?: "세션 기록 저장에 실패했어요.",
+                        )
+                    }
+                },
+            )
+        }
+    }
+
+    fun savePlace() {
+        if (_uiState.value.placeName.isBlank()) {
+            DebugLog.w("[리포트][장소저장] 실패: 장소명이 비어 있음")
+            _uiState.update { it.copy(errorMessage = "장소 정보가 없어서 저장할 수 없어요.") }
+            return
+        }
+        if (_uiState.value.placeSaved || _uiState.value.isSavingPlace) return
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSavingPlace = true, errorMessage = null) }
+            val state = _uiState.value
+            val result =
+                repository.savePlace(
+                    SavedPlaceRequest(
+                        name = state.placeName,
+                        latitude = state.placeLatitude,
+                        longitude = state.placeLongitude,
+                    ),
+                )
+
+            result.fold(
+                onSuccess = {
+                    DebugLog.d("[리포트][장소저장] 성공: ${state.placeName}")
+                    _uiState.update {
+                        it.copy(
+                            isSavingPlace = false,
+                            placeSaved = true,
+                            errorMessage = null,
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    DebugLog.e("[리포트][장소저장] 실패: ${error.message}", error)
+                    _uiState.update {
+                        it.copy(
+                            isSavingPlace = false,
+                            errorMessage = error.message ?: "장소 저장에 실패했어요.",
+                        )
+                    }
+                },
+            )
+        }
+    }
+
+    fun hideHistoryItem(sessionId: String) {
+        if (_uiState.value.deletingSessionIds.contains(sessionId)) return
+
+        viewModelScope.launch {
+            DebugLog.d("[리포트][삭제] 시작 sessionId=$sessionId")
+            _uiState.update { state ->
+                state.copy(
+                    deletingSessionIds = state.deletingSessionIds + sessionId,
+                    errorMessage = null,
+                    deleteFeedbackMessage = null,
+                )
+            }
+
+            val result = repository.deleteStudySession(sessionId)
+            result.fold(
+                onSuccess = {
+                    DebugLog.d("[리포트][삭제] 성공 sessionId=$sessionId")
+                    _uiState.update { state ->
+                        state.copy(
+                            deletingSessionIds = state.deletingSessionIds - sessionId,
+                            history = state.history.filterNot { it.sessionId == sessionId },
+                            deleteFeedbackMessage = "기록을 숨김 처리했어요. (Firestore에는 보관돼요)",
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    DebugLog.e("[리포트][삭제] 실패 sessionId=$sessionId, ${error.message}", error)
+                    val message =
+                        when (error.message) {
+                            "삭제할 기록을 찾을 수 없어요." -> "이미 없는 기록이에요. 목록을 새로고침해 주세요."
+                            "이미 삭제된 기록이에요." -> "이미 숨김 처리된 기록이에요."
+                            else -> error.message ?: "기록 삭제에 실패했어요."
+                        }
+                    _uiState.update { state ->
+                        state.copy(
+                            deletingSessionIds = state.deletingSessionIds - sessionId,
+                            deleteFeedbackMessage = message,
+                        )
+                    }
+                },
+            )
+        }
+    }
+
+    fun refreshHistory() {
+        loadHistory()
+    }
+
+    fun consumeDeleteFeedbackMessage() {
+        _uiState.update { it.copy(deleteFeedbackMessage = null) }
+    }
+
+    private fun loadHistory() {
+        viewModelScope.launch {
+            DebugLog.d("[리포트][목록조회] 시작")
+            _uiState.update { it.copy(isLoadingHistory = true, historyErrorMessage = null) }
+            val result = repository.getStudySessions()
+            result.fold(
+                onSuccess = { records ->
+                    val mapped = records.map(::toUiItem)
+                    DebugLog.d("[리포트][목록조회] 성공: ${mapped.size}개")
+                    _uiState.update {
+                        it.copy(
+                            isLoadingHistory = false,
+                            history = mapped,
+                            historyErrorMessage = null,
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    DebugLog.e("[리포트][목록조회] 실패: ${error.message}", error)
+                    _uiState.update {
+                        it.copy(
+                            isLoadingHistory = false,
+                            history = emptyList(),
+                            historyErrorMessage = error.message ?: "기록을 불러오지 못했어요.",
+                        )
+                    }
+                },
+            )
+        }
+    }
+
+    private fun toUiItem(record: StudySessionRecord): StudyHistoryUiItem =
+        StudyHistoryUiItem(
+            sessionId = record.sessionId,
+            placeName = record.placeName,
+            focusScore = record.focusScoreAvg.toInt(),
+            durationMinutes = (record.durationSec / 60).coerceAtLeast(1),
+            endedAtEpochMillis = record.endedAtEpochMillis,
+        )
 }

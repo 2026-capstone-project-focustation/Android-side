@@ -43,6 +43,8 @@ import com.naver.maps.map.NaverMap
 import com.naver.maps.map.overlay.Marker
 import com.naver.maps.map.util.FusedLocationSource
 import net.focustation.myapplication.data.model.SpaceRecord
+import net.focustation.myapplication.ui.components.MainBottomDestination
+import net.focustation.myapplication.ui.components.MainBottomNavigationBar
 import net.focustation.myapplication.ui.theme.*
 import net.focustation.myapplication.util.DebugLog
 
@@ -50,6 +52,9 @@ import net.focustation.myapplication.util.DebugLog
 @Composable
 fun SpaceHistoryScreen(
     onBack: () -> Unit,
+    onNavigateToHome: () -> Unit = {},
+    onNavigateToReport: () -> Unit = {},
+    onNavigateToSettings: () -> Unit = {},
     viewModel: SpaceHistoryViewModel = viewModel(),
 ) {
     val context = LocalContext.current
@@ -101,6 +106,19 @@ fun SpaceHistoryScreen(
         }
 
     Scaffold(
+        bottomBar = {
+            MainBottomNavigationBar(
+                selected = MainBottomDestination.MAP,
+                onTabClick = { destination ->
+                    when (destination) {
+                        MainBottomDestination.HOME -> onNavigateToHome()
+                        MainBottomDestination.REPORT -> onNavigateToReport()
+                        MainBottomDestination.MAP -> Unit
+                        MainBottomDestination.SETTINGS -> onNavigateToSettings()
+                    }
+                },
+            )
+        },
         topBar = {
             TopAppBar(
                 title = { Text("공간 기반 이력", fontWeight = FontWeight.Bold) },
