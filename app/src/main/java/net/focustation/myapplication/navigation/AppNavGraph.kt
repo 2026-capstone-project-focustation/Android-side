@@ -1,11 +1,13 @@
 package net.focustation.myapplication.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import net.focustation.myapplication.survey.SurveyPreferences
 import net.focustation.myapplication.ui.screen.dashboard.DashboardScreen
 import net.focustation.myapplication.ui.screen.login.LoginScreen
 import net.focustation.myapplication.ui.screen.onboarding.OnboardingScreen
@@ -16,10 +18,12 @@ import net.focustation.myapplication.ui.screen.session.FeedbackSessionScreen
 import net.focustation.myapplication.ui.screen.session.FocusSessionScreen
 import net.focustation.myapplication.ui.screen.settings.SettingsScreen
 import net.focustation.myapplication.ui.screen.space.SpaceHistoryScreen
+import net.focustation.myapplication.ui.screen.survey.SurveyScreen
 
 @Composable
 fun AppNavGraph(navController: NavHostController) {
     val reportTabRoute = NavRoute.SessionReport.createRoute(false)
+    val context = LocalContext.current
 
     NavHost(
         navController = navController,
@@ -28,7 +32,13 @@ fun AppNavGraph(navController: NavHostController) {
         composable(NavRoute.Login.route) {
             LoginScreen(
                 onLoginSuccess = {
-                    navController.navigate(NavRoute.Onboarding.route) {
+                    val nextRoute =
+                        if (SurveyPreferences.isCompleted(context)) {
+                            NavRoute.Dashboard.route
+                        } else {
+                            NavRoute.Onboarding.route
+                        }
+                    navController.navigate(nextRoute) {
                         popUpTo(NavRoute.Login.route) { inclusive = true }
                     }
                 },
@@ -38,8 +48,25 @@ fun AppNavGraph(navController: NavHostController) {
         composable(NavRoute.Onboarding.route) {
             OnboardingScreen(
                 onFinish = {
-                    navController.navigate(NavRoute.Dashboard.route) {
+                    val nextRoute =
+                        if (SurveyPreferences.isCompleted(context)) {
+                            NavRoute.Dashboard.route
+                        } else {
+                            NavRoute.Survey.route
+                        }
+                    navController.navigate(nextRoute) {
                         popUpTo(NavRoute.Onboarding.route) { inclusive = true }
+                    }
+                },
+            )
+        }
+
+        composable(NavRoute.Survey.route) {
+            SurveyScreen(
+                onComplete = {
+                    navController.navigate(NavRoute.Dashboard.route) {
+                        popUpTo(NavRoute.Survey.route) { inclusive = true }
+                        launchSingleTop = true
                     }
                 },
             )
@@ -51,6 +78,7 @@ fun AppNavGraph(navController: NavHostController) {
                 onNavigateToReport = { navController.navigateToMainTab(reportTabRoute) },
                 onNavigateToSpaceHistory = { navController.navigateToMainTab(NavRoute.SpaceHistory.route) },
                 onNavigateToSettings = { navController.navigateToMainTab(NavRoute.Settings.route) },
+                onRetakeSurvey = { navController.navigate(NavRoute.Survey.route) },
             )
         }
 

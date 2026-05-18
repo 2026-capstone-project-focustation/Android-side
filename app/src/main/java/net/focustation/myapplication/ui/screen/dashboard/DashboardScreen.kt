@@ -33,6 +33,7 @@ import net.focustation.myapplication.ui.theme.Primary40
  * @param onStartSession Callback invoked when the "start session" button is pressed.
  * @param onNavigateToSpaceHistory Callback invoked when the "지도" (map) navigation item is selected.
  * @param onNavigateToSettings Callback invoked when the "설정" (settings) navigation item is selected.
+ * @param onRetakeSurvey Callback invoked when the user wants to update survey answers.
  * @param viewModel Provides the UI state displayed by this screen; defaults to `viewModel()`.
  */
 
@@ -42,6 +43,7 @@ fun DashboardScreen(
     onNavigateToReport: () -> Unit,
     onNavigateToSpaceHistory: () -> Unit,
     onNavigateToSettings: () -> Unit,
+    onRetakeSurvey: () -> Unit,
     viewModel: DashboardViewModel = viewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -165,9 +167,16 @@ fun DashboardScreen(
                 }
             }
 
+            item {
+                SurveyRetakeCard(
+                    onRetakeSurvey = onRetakeSurvey,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
+                )
+            }
+
             // ─── 최근 세션 목록 ──────────────────────────────────────────────
             item {
-                Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+                Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp)) {
                     SectionTitle(title = "최근 세션")
                     Spacer(Modifier.height(10.dp))
                 }
@@ -224,6 +233,49 @@ fun DashboardScreen(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SurveyRetakeCard(
+    onRetakeSurvey: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = Color(0xFFEAF4F1),
+            ),
+        elevation = CardDefaults.cardElevation(1.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "맞춤 설문",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    color = Color(0xFF244E47),
+                )
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    text = "선호가 바뀌면 답변을 다시 조정할 수 있어요.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF58706A),
+                )
+            }
+            OutlinedButton(
+                onClick = onRetakeSurvey,
+                shape = RoundedCornerShape(12.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            ) {
+                Text("설문조사 다시하기")
             }
         }
     }
@@ -290,6 +342,7 @@ private fun DashboardPreview() {
             onNavigateToReport = {},
             onNavigateToSpaceHistory = {},
             onNavigateToSettings = {},
+            onRetakeSurvey = {},
         )
     }
 }
