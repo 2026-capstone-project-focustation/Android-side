@@ -4,6 +4,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.tasks.await
 import net.focustation.myapplication.survey.SurveyResponse
 import net.focustation.myapplication.util.DebugLog
@@ -50,6 +51,7 @@ class FirestoreSurveyRepository(
 
             DebugLog.d("[Firestore][설문저장][성공] uid=${uidForLog(uid)}, responseId=$responseId")
         }.onFailure { error ->
+            if (error is CancellationException) throw error
             DebugLog.e("[Firestore][설문저장][실패] ${error.message}", error)
         }
 

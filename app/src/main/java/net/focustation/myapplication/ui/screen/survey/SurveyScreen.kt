@@ -443,7 +443,7 @@ private fun rememberSurveyPages(viewModel: SurveyViewModel): List<SurveyPage> =
                             ),
                         selectedValue = state.satisfactionScore.toString(),
                         onSelected = {
-                            viewModel.setSatisfactionScore(it.toFloat())
+                            viewModel.setSatisfactionScore(it.toInt())
                             goNext()
                         },
                     )

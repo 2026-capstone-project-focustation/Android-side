@@ -10,6 +10,7 @@ import kotlinx.coroutines.launch
 import net.focustation.myapplication.data.repository.FirestoreSurveyRepository
 import net.focustation.myapplication.survey.SurveyResponse
 import net.focustation.myapplication.survey.SurveyResponseStore
+import kotlin.math.round
 
 data class SurveyOption(
     val value: String,
@@ -165,20 +166,19 @@ class SurveyViewModel(
         }
     }
 
-    fun setSatisfactionScore(value: Float) {
-        _uiState.update { it.copy(satisfactionScore = value.toInt().coerceIn(1, 100)) }
+    fun setSatisfactionScore(value: Int) {
+        _uiState.update { it.copy(satisfactionScore = value.coerceIn(1, 100)) }
     }
 
     fun submit() {
-        if (_uiState.value.isSaving) return
+        val state =
+            markSavingOrNull()
+                ?: return
 
-        val state = _uiState.value
         val response = state.toSurveyResponse()
         SurveyResponseStore.save(response)
 
         viewModelScope.launch {
-            _uiState.update { it.copy(isSaving = true, errorMessage = null) }
-
             val result = repository.saveSurveyResponse(response)
             result.fold(
                 onSuccess = {
@@ -199,6 +199,16 @@ class SurveyViewModel(
                     }
                 },
             )
+        }
+    }
+
+    private fun markSavingOrNull(): SurveyUiState? {
+        while (true) {
+            val state = _uiState.value
+            if (state.isSaving) return null
+
+            val savingState = state.copy(isSaving = true, errorMessage = null)
+            if (_uiState.compareAndSet(state, savingState)) return state
         }
     }
 }
@@ -399,7 +409,7 @@ private fun SurveyUiState.toModelInputPayload(): Map<String, Any> {
     payload["stay_duration"] = stayDuration
     payload["time_slot"] = timeSlot
     payload["day_type"] = dayType
-    payload["distance_minutes"] = "%.1f".format(distanceMinutes).toFloat()
+    payload["distance_minutes"] = distanceMinutes.roundToTenth()
     payload["weather"] = weather
     payload["indoor_outdoor"] = indoorOutdoor
     payload["visit_frequency"] = visitFrequency
@@ -431,7 +441,7 @@ private fun SurveyUiState.buildDerivedFeatures(): Map<String, Any> {
         "control_match" to pref.getValue("pref_control") * place.getValue("place_control"),
         "comfort_match" to pref.getValue("pref_comfort") * place.getValue("place_comfort"),
         "deepwork_task_match" to pref.getValue("pref_deepwork") * taskFocusWeight(taskType),
-        "distance_penalty" to "%.1f".format(pref.getValue("pref_distance") * distanceMinutes).toFloat(),
+        "distance_penalty" to (pref.getValue("pref_distance") * distanceMinutes).roundToTenth(),
         "task_place_fit_match" to place.getValue("place_task_fit"),
         "time_match" to if (generalTimeSlot == timeSlot) 1 else 0,
     )
@@ -443,3 +453,5 @@ private fun taskFocusWeight(taskType: String): Int =
         "light_reading", "online_class" -> 3
         else -> 1
     }
+
+private fun Float.roundToTenth(): Float = round(this * 10f) / 10f
