@@ -105,6 +105,8 @@ fun SurveyScreen(
     }
 
     fun goPrevious() {
+        if (uiState.isSaving) return
+
         if (pagerState.currentPage > 0) {
             scope.launch {
                 pagerState.animateScrollToPage(pagerState.currentPage - 1)
@@ -112,7 +114,7 @@ fun SurveyScreen(
         }
     }
 
-    BackHandler(enabled = currentPage > 0) {
+    BackHandler(enabled = currentPage > 0 && !uiState.isSaving) {
         goPrevious()
     }
 
@@ -161,7 +163,7 @@ fun SurveyScreen(
 
             HorizontalPager(
                 state = pagerState,
-                userScrollEnabled = true,
+                userScrollEnabled = !uiState.isSaving,
                 contentPadding = PaddingValues(horizontal = 18.dp),
                 pageSpacing = 12.dp,
                 modifier = Modifier.weight(1f),
