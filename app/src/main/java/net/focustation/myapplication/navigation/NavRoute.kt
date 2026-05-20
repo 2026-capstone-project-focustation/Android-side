@@ -9,6 +9,9 @@ sealed class NavRoute(
     // Onboarding
     data object Onboarding : NavRoute("onboarding")
 
+    // Initial survey
+    data object Survey : NavRoute("survey")
+
     // Main
     data object Dashboard : NavRoute("dashboard")
 
