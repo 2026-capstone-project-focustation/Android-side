@@ -27,6 +27,14 @@ object SessionReportDraftStore {
     }
 
     @Synchronized
+    fun peek(): SessionReportDraft? = latestDraft
+
+    @Synchronized
+    fun clear() {
+        latestDraft = null
+    }
+
+    @Synchronized
     fun consume(): SessionReportDraft? =
         latestDraft.also {
             if (it == null) {

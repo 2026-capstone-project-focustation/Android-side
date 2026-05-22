@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,14 +23,19 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import net.focustation.myapplication.ui.components.FocusCard
+import net.focustation.myapplication.ui.components.FocusInsightCard
 import net.focustation.myapplication.ui.components.FocusScoreGauge
+import net.focustation.myapplication.ui.components.FocusSectionHeader
 import net.focustation.myapplication.ui.components.MiniLineGraph
 import net.focustation.myapplication.ui.theme.ColorFocus
+import net.focustation.myapplication.ui.theme.FocusCanvas
+import net.focustation.myapplication.ui.theme.FocusInk
+import net.focustation.myapplication.ui.theme.FocusMint
+import net.focustation.myapplication.ui.theme.FocusMuted
 import net.focustation.myapplication.ui.theme.FocustationTheme
-import net.focustation.myapplication.ui.theme.Primary40
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,19 +74,20 @@ fun FocusSessionScreen(
                 },
                 colors =
                     TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color(0xFF0D1B4B),
-                        titleContentColor = Color.White,
-                        navigationIconContentColor = Color.White,
+                        containerColor = FocusCanvas,
+                        titleContentColor = FocusInk,
+                        navigationIconContentColor = FocusInk,
                     ),
             )
         },
+        containerColor = FocusCanvas,
     ) { paddingValues ->
         Column(
             modifier =
                 Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .background(MaterialTheme.colorScheme.background),
+                    .background(FocusCanvas),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             // 헤더 영역 — 타이머
@@ -88,7 +97,7 @@ fun FocusSessionScreen(
                         .fillMaxWidth()
                         .background(
                             Brush.verticalGradient(
-                                listOf(Color(0xFF0D1B4B), Color(0xFF1A3BAA)),
+                                listOf(FocusInk, Color(0xFF24312E)),
                             ),
                         ).padding(vertical = 28.dp),
                 contentAlignment = Alignment.Center,
@@ -112,9 +121,9 @@ fun FocusSessionScreen(
                     Text(
                         text =
                             if (uiState.isRunning) {
-                                "● 측정 중"
+                                "측정 중"
                             } else if (uiState.isPaused) {
-                                "⏸ 일시정지"
+                                "일시정지"
                             } else {
                                 "대기 중"
                             },
@@ -127,10 +136,10 @@ fun FocusSessionScreen(
             Spacer(Modifier.height(24.dp))
 
             // 환경 적합도 게이지
-            Text(
-                text = "환경 적합도",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurface,
+            FocusSectionHeader(
+                title = "환경 적합도",
+                subtitle = "센서값을 합산한 현재 집중 조건",
+                modifier = Modifier.padding(horizontal = 20.dp),
             )
             Spacer(Modifier.height(12.dp))
             FocusScoreGauge(
@@ -141,19 +150,17 @@ fun FocusSessionScreen(
             Spacer(Modifier.height(20.dp))
 
             // 적합도 추이 그래프
-            Card(
+            FocusCard(
                 modifier =
                     Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp),
-                shape = RoundedCornerShape(16.dp),
-                elevation = CardDefaults.cardElevation(2.dp),
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column {
                     Text(
                         text = "환경 적합도 추이",
                         style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = FocusMuted,
                     )
                     Spacer(Modifier.height(8.dp))
                     if (uiState.fitHistory.size >= 2) {
@@ -178,7 +185,7 @@ fun FocusSessionScreen(
                             Text(
                                 "세션 시작 후 그래프가 표시됩니다",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = FocusMuted,
                             )
                         }
                     }
@@ -188,30 +195,15 @@ fun FocusSessionScreen(
             Spacer(Modifier.height(16.dp))
 
             // 집중 팁 카드
-            Card(
+            FocusInsightCard(
+                title = focusTipTitle(uiState.environmentFitScore),
+                message = focusTipMessage(uiState.environmentFitScore, uiState.isRunning),
                 modifier =
                     Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors =
-                    CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
-                    ),
-            ) {
-                Row(
-                    modifier = Modifier.padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text("💡", fontSize = 22.sp)
-                    Spacer(Modifier.width(10.dp))
-                    Text(
-                        text = "현재 환경은 집중에 적합합니다. 방해 요소를 최소화하고 작업에 집중해보세요.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-            }
+                accentColor = if (uiState.environmentFitScore >= 60f) FocusMint else ColorFocus,
+            )
 
             Spacer(Modifier.weight(1f))
 
@@ -243,10 +235,12 @@ fun FocusSessionScreen(
                                 Modifier
                                     .weight(1f)
                                     .height(54.dp),
-                            shape = RoundedCornerShape(14.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Primary40),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = FocusInk),
                         ) {
-                            Text("▶  집중 시작", style = MaterialTheme.typography.labelLarge)
+                            Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                            Spacer(Modifier.width(6.dp))
+                            Text("집중 시작", style = MaterialTheme.typography.labelLarge)
                         }
                     }
 
@@ -257,9 +251,11 @@ fun FocusSessionScreen(
                                 Modifier
                                     .weight(1f)
                                     .height(54.dp),
-                            shape = RoundedCornerShape(14.dp),
+                            shape = RoundedCornerShape(12.dp),
                         ) {
-                            Text("⏸  일시정지")
+                            Icon(Icons.Filled.Pause, contentDescription = null)
+                            Spacer(Modifier.width(6.dp))
+                            Text("일시정지")
                         }
                         Button(
                             onClick = {
@@ -270,13 +266,15 @@ fun FocusSessionScreen(
                                 Modifier
                                     .weight(1f)
                                     .height(54.dp),
-                            shape = RoundedCornerShape(14.dp),
+                            shape = RoundedCornerShape(12.dp),
                             colors =
                                 ButtonDefaults.buttonColors(
                                     containerColor = MaterialTheme.colorScheme.error,
                                 ),
                         ) {
-                            Text("⏹  종료")
+                            Icon(Icons.Filled.Stop, contentDescription = null)
+                            Spacer(Modifier.width(6.dp))
+                            Text("종료")
                         }
                     }
 
@@ -287,10 +285,12 @@ fun FocusSessionScreen(
                                 Modifier
                                     .weight(1f)
                                     .height(54.dp),
-                            shape = RoundedCornerShape(14.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Primary40),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = FocusInk),
                         ) {
-                            Text("▶  재개")
+                            Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                            Spacer(Modifier.width(6.dp))
+                            Text("재개")
                         }
                         OutlinedButton(
                             onClick = {
@@ -301,9 +301,11 @@ fun FocusSessionScreen(
                                 Modifier
                                     .weight(1f)
                                     .height(54.dp),
-                            shape = RoundedCornerShape(14.dp),
+                            shape = RoundedCornerShape(12.dp),
                         ) {
-                            Text("⏹  종료")
+                            Icon(Icons.Filled.Stop, contentDescription = null)
+                            Spacer(Modifier.width(6.dp))
+                            Text("종료")
                         }
                     }
                 }
@@ -311,6 +313,25 @@ fun FocusSessionScreen(
         }
     }
 }
+
+private fun focusTipTitle(score: Float): String =
+    when {
+        score <= 0f -> "세션을 시작하면 상태가 잡혀요"
+        score >= 75f -> "집중 흐름이 안정적이에요"
+        score >= 50f -> "조금만 정리하면 좋아져요"
+        else -> "환경 조정이 먼저 필요해요"
+    }
+
+private fun focusTipMessage(
+    score: Float,
+    isRunning: Boolean,
+): String =
+    when {
+        score <= 0f && !isRunning -> "마이크 권한을 허용하고 집중 시작을 누르면 소음, 조도, 진동을 함께 추적합니다."
+        score >= 75f -> "지금 상태를 유지하면서 작업을 시작해도 좋아요. 세션이 끝나면 리포트에서 흐름을 확인할 수 있어요."
+        score >= 50f -> "주변 소리나 조명을 한 번만 조정해보세요. 작은 변화가 점수에 바로 반영됩니다."
+        else -> "자리 이동, 조명 조정, 소음 차단 중 하나를 먼저 시도한 뒤 다시 흐름을 이어가세요."
+    }
 
 @Preview(showBackground = true)
 @Composable
