@@ -9,6 +9,7 @@ import kotlinx.coroutines.launch
 import net.focustation.myapplication.data.model.SpaceRecord
 import net.focustation.myapplication.data.repository.FirestoreStudyRepository
 import net.focustation.myapplication.data.repository.StudySessionRecord
+import net.focustation.myapplication.util.DebugLog
 import kotlin.math.roundToInt
 
 enum class SpaceSortOption { DATE, PLACE, SCORE }
@@ -20,6 +21,7 @@ data class SpaceHistoryUiState(
     val selectedSpaceId: String? = null,
     val filterMinScore: Int = 0,
     val filterMaxNoise: Float = 100f,
+    val errorMessage: String? = null,
 )
 
 class SpaceHistoryViewModel(
@@ -46,8 +48,20 @@ class SpaceHistoryViewModel(
 
     private fun loadSpaces() {
         viewModelScope.launch {
-            val sessions = repository.getStudySessions().getOrNull().orEmpty()
-            _uiState.value = _uiState.value.copy(spaceRecords = sessions.toSpaceRecords())
+            repository.getStudySessions().fold(
+                onSuccess = { sessions ->
+                    _uiState.value =
+                        _uiState.value.copy(
+                            spaceRecords = sessions.toSpaceRecords(),
+                            errorMessage = null,
+                        )
+                },
+                onFailure = { error ->
+                    DebugLog.e("[공간기록][조회] 실패: ${error.message}", error)
+                    _uiState.value =
+                        _uiState.value.copy(errorMessage = error.message ?: "공간 기록을 불러오지 못했어요.")
+                },
+            )
         }
     }
 }

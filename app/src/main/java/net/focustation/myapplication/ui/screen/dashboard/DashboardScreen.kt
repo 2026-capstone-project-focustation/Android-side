@@ -652,7 +652,9 @@ private fun calculateCurrentEnvironmentScore(
             noise
                 .takeIf { it > 0f }
                 ?.let { ScoreCalculator.calculateNoiseScore(listOf(it.toDouble())) },
-            ScoreCalculator.calculateVibrationScore(listOf(vibration.coerceAtLeast(0.0))),
+            vibration
+                .takeIf { it > 0.0 }
+                ?.let { ScoreCalculator.calculateVibrationScore(listOf(it)) },
         )
 
     return ScoreCalculator

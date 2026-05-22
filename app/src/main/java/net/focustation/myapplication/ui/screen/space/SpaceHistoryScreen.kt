@@ -175,6 +175,7 @@ fun SpaceHistoryScreen(
             MapNoticeLayer(
                 isNaverMapMcpIdConfigured = isNaverMapMcpIdConfigured,
                 hasLocationPermission = hasLocationPermission,
+                errorMessage = uiState.errorMessage,
                 onRequestLocationPermission = { locationPermissionLauncher.launch(LOCATION_PERMISSIONS) },
                 modifier = Modifier.align(Alignment.TopCenter),
             )
@@ -194,6 +195,7 @@ fun SpaceHistoryScreen(
 private fun MapNoticeLayer(
     isNaverMapMcpIdConfigured: Boolean,
     hasLocationPermission: Boolean,
+    errorMessage: String?,
     onRequestLocationPermission: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -210,6 +212,21 @@ private fun MapNoticeLayer(
             ) {
                 Text(
                     text = "NAVER_MAP_MCP_ID가 비어 있어요. local.properties 또는 gradle.properties를 확인해주세요.",
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                )
+            }
+        }
+
+        if (errorMessage != null) {
+            ElevatedCard(
+                colors =
+                    CardDefaults.elevatedCardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                    ),
+            ) {
+                Text(
+                    text = errorMessage,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                     color = MaterialTheme.colorScheme.onErrorContainer,
                 )

@@ -46,10 +46,6 @@ class SessionReportViewModel(
     private val _uiState = MutableStateFlow(SessionReportUiState())
     val uiState: StateFlow<SessionReportUiState> = _uiState.asStateFlow()
 
-    init {
-        loadHistory()
-    }
-
     fun onScreenEntered() {
         DebugLog.d("[리포트][진입] 세션 보관함 조회")
         loadHistory()

@@ -55,6 +55,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.auth.api.signin.GoogleSignInStatusCodes
 import com.google.android.gms.common.GoogleApiAvailability
 import com.google.android.gms.common.api.ApiException
+import net.focustation.myapplication.BuildConfig
 import net.focustation.myapplication.R
 import net.focustation.myapplication.ui.components.ReferenceDesignTokens
 import net.focustation.myapplication.ui.theme.FocustationTheme
@@ -210,7 +211,7 @@ fun LoginScreen(
                 )
             }
 
-            if (webClientId.isNullOrBlank()) {
+            if (BuildConfig.DEBUG && webClientId.isNullOrBlank()) {
                 Spacer(Modifier.height(8.dp))
                 TextButton(
                     onClick = onLoginSuccess,
