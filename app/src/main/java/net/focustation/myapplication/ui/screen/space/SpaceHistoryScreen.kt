@@ -8,18 +8,42 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -28,7 +52,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -45,7 +68,13 @@ import com.naver.maps.map.util.FusedLocationSource
 import net.focustation.myapplication.data.model.SpaceRecord
 import net.focustation.myapplication.ui.components.MainBottomDestination
 import net.focustation.myapplication.ui.components.MainBottomNavigationBar
-import net.focustation.myapplication.ui.theme.*
+import net.focustation.myapplication.ui.components.ReferenceDesignTokens
+import net.focustation.myapplication.ui.theme.ColorFocus
+import net.focustation.myapplication.ui.theme.ColorLight
+import net.focustation.myapplication.ui.theme.ColorNoise
+import net.focustation.myapplication.ui.theme.ColorVibration
+import net.focustation.myapplication.ui.theme.FocusInk
+import net.focustation.myapplication.ui.theme.FocustationTheme
 import net.focustation.myapplication.util.DebugLog
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -69,7 +98,6 @@ fun SpaceHistoryScreen(
             hasLocationPermission = permissionResult.any { it.value }
         }
 
-    // 시스템 설정에서 권한 변경 시 UI 새로고침을 위한 Lifecycle 옵저버
     DisposableEffect(lifecycleOwner) {
         val observer =
             LifecycleEventObserver { _, event ->
@@ -83,21 +111,13 @@ fun SpaceHistoryScreen(
         }
     }
 
-    LaunchedEffect(uiState.isMapView, hasLocationPermission, requestedLocationPermission) {
-        if (uiState.isMapView && !hasLocationPermission && !requestedLocationPermission) {
+    LaunchedEffect(hasLocationPermission, requestedLocationPermission) {
+        if (!hasLocationPermission && !requestedLocationPermission) {
             requestedLocationPermission = true
             locationPermissionLauncher.launch(LOCATION_PERMISSIONS)
         }
     }
 
-    val sortedRecords =
-        remember(uiState.spaceRecords, uiState.sortOption) {
-            when (uiState.sortOption) {
-                SpaceSortOption.SCORE -> uiState.spaceRecords.sortedByDescending { it.avgFocusScore }
-                SpaceSortOption.PLACE -> uiState.spaceRecords.sortedBy { it.name }
-                SpaceSortOption.DATE -> uiState.spaceRecords
-            }
-        }
     val selectedRecord =
         remember(uiState.selectedSpaceId, uiState.spaceRecords) {
             uiState.selectedSpaceId?.let { selectedId ->
@@ -121,162 +141,96 @@ fun SpaceHistoryScreen(
         },
         topBar = {
             TopAppBar(
-                title = { Text("공간 기반 이력", fontWeight = FontWeight.Bold) },
+                title = { Text("공간 기록", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로")
                     }
                 },
-                actions = {
-                    IconButton(onClick = { viewModel.toggleView() }) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.List,
-                            contentDescription = "뷰 전환",
-                            tint = Color.White,
-                        )
-                    }
-                },
                 colors =
                     TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color(0xFF0D1B4B),
-                        titleContentColor = Color.White,
-                        navigationIconContentColor = Color.White,
-                        actionIconContentColor = Color.White,
+                        containerColor = ReferenceDesignTokens.Screen,
+                        titleContentColor = FocusInk,
+                        navigationIconContentColor = FocusInk,
                     ),
             )
         },
+        containerColor = ReferenceDesignTokens.Screen,
     ) { paddingValues ->
-        Column(
+        Box(
             modifier =
                 Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .background(MaterialTheme.colorScheme.background),
+                    .background(ReferenceDesignTokens.Screen),
         ) {
-            // 지도/리스트 토글 탭
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                FilterChip(
-                    selected = uiState.isMapView,
-                    onClick = { if (!uiState.isMapView) viewModel.toggleView() },
-                    label = { Text("🗺️  지도 뷰") },
-                )
-                FilterChip(
-                    selected = !uiState.isMapView,
-                    onClick = { if (uiState.isMapView) viewModel.toggleView() },
-                    label = { Text("📋  리스트 뷰") },
+            NaverMapSection(
+                records = uiState.spaceRecords,
+                selectedId = uiState.selectedSpaceId,
+                hasLocationPermission = hasLocationPermission,
+                onPinClick = { viewModel.selectSpace(it) },
+                modifier = Modifier.fillMaxSize(),
+            )
+
+            MapNoticeLayer(
+                isNaverMapMcpIdConfigured = isNaverMapMcpIdConfigured,
+                hasLocationPermission = hasLocationPermission,
+                onRequestLocationPermission = { locationPermissionLauncher.launch(LOCATION_PERMISSIONS) },
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
+
+            selectedRecord?.let {
+                SpaceDetailPopup(
+                    record = it,
+                    onDismiss = { viewModel.selectSpace(null) },
+                    modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }
+        }
+    }
+}
 
-            if (uiState.isMapView) {
-                Box(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                ) {
-                    NaverMapSection(
-                        records = sortedRecords,
-                        selectedId = uiState.selectedSpaceId,
-                        hasLocationPermission = hasLocationPermission,
-                        onPinClick = { viewModel.selectSpace(it) },
-                        modifier = Modifier.fillMaxSize(),
-                    )
+@Composable
+private fun MapNoticeLayer(
+    isNaverMapMcpIdConfigured: Boolean,
+    hasLocationPermission: Boolean,
+    onRequestLocationPermission: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (!isNaverMapMcpIdConfigured) {
+            ElevatedCard(
+                colors =
+                    CardDefaults.elevatedCardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                    ),
+            ) {
+                Text(
+                    text = "NAVER_MAP_MCP_ID가 비어 있어요. local.properties 또는 gradle.properties를 확인해주세요.",
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                )
+            }
+        }
 
-                    Column(
-                        modifier =
-                            Modifier
-                                .align(Alignment.TopCenter)
-                                .padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        if (!isNaverMapMcpIdConfigured) {
-                            ElevatedCard(
-                                colors =
-                                    CardDefaults.elevatedCardColors(
-                                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                                    ),
-                            ) {
-                                Text(
-                                    text = "NAVER_MAP_MCP_ID가 비어 있어요. local.properties 또는 gradle.properties를 확인해주세요.",
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                    color = MaterialTheme.colorScheme.onErrorContainer,
-                                )
-                            }
-                        }
-
-                        if (!hasLocationPermission) {
-                            ElevatedCard(
-                                colors =
-                                    CardDefaults.elevatedCardColors(
-                                        containerColor = MaterialTheme.colorScheme.surface,
-                                    ),
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                ) {
-                                    Text("내 위치 추적을 위해 위치 권한이 필요해요.")
-                                    TextButton(onClick = { locationPermissionLauncher.launch(LOCATION_PERMISSIONS) }) {
-                                        Text("권한 허용")
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // 선택된 장소 팝업 카드 - 오버레이로 배치
-                    selectedRecord?.let {
-                        SpaceDetailPopup(
-                            record = it,
-                            onDismiss = { viewModel.selectSpace(null) },
-                            modifier = Modifier.align(Alignment.BottomCenter),
-                        )
-                    }
-                }
-            } else {
-                // 정렬 옵션
+        if (!hasLocationPermission) {
+            ElevatedCard(
+                colors =
+                    CardDefaults.elevatedCardColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                    ),
+            ) {
                 Row(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Text(
-                        "정렬:",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    SpaceSortOption.entries.forEach { opt ->
-                        FilterChip(
-                            selected = uiState.sortOption == opt,
-                            onClick = { viewModel.setSortOption(opt) },
-                            label = {
-                                Text(opt.toDisplayLabel(), fontSize = 12.sp)
-                            },
-                        )
-                    }
-                }
-
-                // 리스트
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    items(sortedRecords) { record ->
-                        SpaceListCard(
-                            record = record,
-                            onClick = { viewModel.selectSpace(record.id) },
-                        )
+                    Text("현재 위치 추적을 위해 위치 권한이 필요해요.")
+                    TextButton(onClick = onRequestLocationPermission) {
+                        Text("권한 허용")
                     }
                 }
             }
@@ -335,32 +289,24 @@ private fun NaverMapSection(
                 when (event) {
                     Lifecycle.Event.ON_START ->
                         runCatching { mapView.onStart() }.onFailure {
-                            DebugLog.e(
-                                "onStart error",
-                                it,
-                            )
+                            DebugLog.e("onStart error", it)
                         }
+
                     Lifecycle.Event.ON_RESUME ->
                         runCatching { mapView.onResume() }.onFailure {
-                            DebugLog.e(
-                                "onResume error",
-                                it,
-                            )
+                            DebugLog.e("onResume error", it)
                         }
+
                     Lifecycle.Event.ON_PAUSE ->
                         runCatching { mapView.onPause() }.onFailure {
-                            DebugLog.e(
-                                "onPause error",
-                                it,
-                            )
+                            DebugLog.e("onPause error", it)
                         }
+
                     Lifecycle.Event.ON_STOP ->
                         runCatching { mapView.onStop() }.onFailure {
-                            DebugLog.e(
-                                "onStop error",
-                                it,
-                            )
+                            DebugLog.e("onStop error", it)
                         }
+
                     else -> Unit
                 }
             }
@@ -455,19 +401,11 @@ private fun NaverMapSection(
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("지도 초기화 실패", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error)
-                if (mapInitErrorMessage != null) {
-                    Text(
-                        mapInitErrorMessage!!,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                } else {
-                    Text(
-                        "네이버 지도 SDK를 초기화할 수 없습니다.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
+                Text(
+                    text = mapInitErrorMessage ?: "네이버 지도 SDK를 초기화할 수 없습니다.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
             }
         }
     } else {
@@ -478,15 +416,6 @@ private fun NaverMapSection(
     }
 }
 
-/**
- * Displays a popup card showing detailed information for a given space record.
- *
- * Shows the space name, average focus score, metrics for noise, illuminance, and vibration,
- * and session/last-visited summary. Includes a control that invokes `onDismiss` to close the popup.
- *
- * @param record The `SpaceRecord` whose details are rendered.
- * @param onDismiss Callback invoked when the user dismisses the popup.
- */
 @Composable
 private fun SpaceDetailPopup(
     record: SpaceRecord,
@@ -527,19 +456,16 @@ private fun SpaceDetailPopup(
                             fontWeight = FontWeight.Bold,
                         )
                     }
-                    Spacer(Modifier.width(8.dp))
-                    IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
-                        Text("✕", fontSize = 14.sp)
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Filled.Close, contentDescription = "닫기", modifier = Modifier.size(16.dp))
                     }
                 }
             }
-            Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 MetricText("소음", "%.0f dB".format(record.avgNoise), ColorNoise)
                 MetricText("조도", "%.0f lux".format(record.avgIlluminance), ColorLight)
                 MetricText("진동", "%.2f m/s²".format(record.avgVibration), ColorVibration)
             }
-            Spacer(Modifier.height(4.dp))
             Text(
                 text = record.toSessionSummary(),
                 style = MaterialTheme.typography.bodySmall,
@@ -549,13 +475,6 @@ private fun SpaceDetailPopup(
     }
 }
 
-/**
- * Displays a centered metric with a prominent value and a smaller label beneath it.
- *
- * @param label The metric label shown below the value (e.g., "Noise").
- * @param value The metric value shown above the label (formatted string, e.g., "42 dB").
- * @param color The color applied to the value text.
- */
 @Composable
 private fun MetricText(
     label: String,
@@ -565,88 +484,6 @@ private fun MetricText(
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(value, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold), color = color)
         Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-/**
- * Displays a clickable card summarizing a space record for the list view.
- *
- * Shows the space name, an average focus score badge, session count with last-visited text,
- * and three small metric tags for noise, illuminance, and vibration.
- *
- * @param record The `SpaceRecord` whose data is displayed.
- * @param onClick Callback invoked when the card is clicked.
- */
-@Composable
-private fun SpaceListCard(
-    record: SpaceRecord,
-    onClick: () -> Unit,
-) {
-    Card(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onClick),
-        shape = RoundedCornerShape(14.dp),
-        elevation = CardDefaults.cardElevation(2.dp),
-    ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // 점수 원형 배지
-            Box(
-                modifier =
-                    Modifier
-                        .size(52.dp)
-                        .clip(CircleShape)
-                        .background(ColorFocus.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = "${record.avgFocusScore}",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = ColorFocus,
-                )
-            }
-
-            Spacer(Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = record.name,
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = record.toSessionSummary(),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(4.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SmallTag(record.toNoiseTag(), ColorNoise)
-                    SmallTag(record.toIlluminanceTag(), ColorLight)
-                    SmallTag(record.toVibrationTag(), ColorVibration)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SmallTag(
-    text: String,
-    color: Color,
-) {
-    Box(
-        modifier =
-            Modifier
-                .clip(CircleShape)
-                .background(color.copy(alpha = 0.12f))
-                .padding(horizontal = 8.dp, vertical = 2.dp),
-    ) {
-        Text(text = text, style = MaterialTheme.typography.labelSmall, color = color)
     }
 }
 
@@ -682,20 +519,7 @@ private fun Context.hasNaverMapMcpIdConfigured(): Boolean =
         clientId.isNotEmpty() && !clientId.startsWith("\${")
     }.getOrDefault(false)
 
-private fun SpaceSortOption.toDisplayLabel(): String =
-    when (this) {
-        SpaceSortOption.DATE -> "날짜"
-        SpaceSortOption.PLACE -> "장소"
-        SpaceSortOption.SCORE -> "점수"
-    }
-
 private fun SpaceRecord.toSessionSummary(): String = "세션 ${sessionCount}회 · 마지막 방문: $lastVisited"
-
-private fun SpaceRecord.toNoiseTag(): String = "소음 %.0fdB".format(avgNoise)
-
-private fun SpaceRecord.toIlluminanceTag(): String = "%.0flux".format(avgIlluminance)
-
-private fun SpaceRecord.toVibrationTag(): String = "%.2fm/s²".format(avgVibration)
 
 @Preview(showBackground = true)
 @Composable
