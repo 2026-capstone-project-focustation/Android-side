@@ -1,16 +1,18 @@
 package net.focustation.myapplication.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
-import net.focustation.myapplication.survey.SurveyPreferences
 import net.focustation.myapplication.ui.screen.dashboard.DashboardScreen
 import net.focustation.myapplication.ui.screen.login.LoginScreen
 import net.focustation.myapplication.ui.screen.onboarding.OnboardingScreen
+import net.focustation.myapplication.ui.screen.onboarding.OnboardingSetupScreen
+import net.focustation.myapplication.ui.screen.onboarding.OnboardingStore
 import net.focustation.myapplication.ui.screen.report.SessionReportDetailScreen
 import net.focustation.myapplication.ui.screen.report.SessionReportScreen
 import net.focustation.myapplication.ui.screen.session.EnvironmentSessionScreen
@@ -22,23 +24,23 @@ import net.focustation.myapplication.ui.screen.survey.SurveyScreen
 
 @Composable
 fun AppNavGraph(navController: NavHostController) {
-    val reportTabRoute = NavRoute.SessionReport.createRoute(false)
+    val reportTabRoute = NavRoute.SessionReport.route
     val context = LocalContext.current
+    val onboardingStore = remember(context) { OnboardingStore(context) }
 
     NavHost(
         navController = navController,
-        startDestination = NavRoute.Login.route,
+        startDestination =
+            if (onboardingStore.isCompleted()) {
+                NavRoute.Dashboard.route
+            } else {
+                NavRoute.Onboarding.route
+            },
     ) {
         composable(NavRoute.Login.route) {
             LoginScreen(
                 onLoginSuccess = {
-                    val nextRoute =
-                        if (SurveyPreferences.isCompleted(context)) {
-                            NavRoute.Dashboard.route
-                        } else {
-                            NavRoute.Onboarding.route
-                        }
-                    navController.navigate(nextRoute) {
+                    navController.navigate(NavRoute.OnboardingSetup.route) {
                         popUpTo(NavRoute.Login.route) { inclusive = true }
                     }
                 },
@@ -47,14 +49,23 @@ fun AppNavGraph(navController: NavHostController) {
 
         composable(NavRoute.Onboarding.route) {
             OnboardingScreen(
-                onFinish = {
-                    val nextRoute =
-                        if (SurveyPreferences.isCompleted(context)) {
-                            NavRoute.Dashboard.route
-                        } else {
-                            NavRoute.Survey.route
-                        }
-                    navController.navigate(nextRoute) {
+                onLoginClick = {
+                    navController.navigate(NavRoute.Login.route)
+                },
+            )
+        }
+
+        composable(NavRoute.OnboardingSetup.route) {
+            OnboardingSetupScreen(
+                onStartSurvey = {
+                    onboardingStore.markCompleted()
+                    navController.navigate(NavRoute.Survey.route) {
+                        popUpTo(NavRoute.Onboarding.route) { inclusive = true }
+                    }
+                },
+                onExploreFirst = {
+                    onboardingStore.markCompleted()
+                    navController.navigate(NavRoute.Dashboard.route) {
                         popUpTo(NavRoute.Onboarding.route) { inclusive = true }
                     }
                 },
@@ -99,32 +110,13 @@ fun AppNavGraph(navController: NavHostController) {
         composable(NavRoute.FeedbackSession.route) {
             FeedbackSessionScreen(
                 onSubmit = {
-                    navController.navigate(NavRoute.SessionReport.createRoute(true)) {
-                        popUpTo(NavRoute.Dashboard.route)
-                    }
-                },
-                onSkip = {
-                    navController.navigate(NavRoute.SessionReport.createRoute(true)) {
-                        popUpTo(NavRoute.Dashboard.route)
-                    }
+                    navController.navigateHomeAfterSession()
                 },
             )
         }
 
-        composable(
-            route = NavRoute.SessionReport.route,
-            arguments =
-                listOf(
-                    navArgument(NavRoute.SessionReport.ARG_FROM_SESSION) {
-                        type = NavType.BoolType
-                        defaultValue = false
-                    },
-                ),
-        ) { backStackEntry ->
-            val isFromActiveSession =
-                backStackEntry.arguments?.getBoolean(NavRoute.SessionReport.ARG_FROM_SESSION) ?: false
+        composable(NavRoute.SessionReport.route) {
             SessionReportScreen(
-                isFromActiveSession = isFromActiveSession,
                 onHistoryItemClick = { sessionId ->
                     navController.navigate(NavRoute.SessionReportDetail.createRoute(sessionId))
                 },
@@ -137,12 +129,6 @@ fun AppNavGraph(navController: NavHostController) {
                 onNavigateToSettings = {
                     navController.navigateToMainTab(NavRoute.Settings.route)
                 },
-                onBack = {
-                    navController.navigate(NavRoute.Dashboard.route) {
-                        popUpTo(NavRoute.Dashboard.route) { inclusive = true }
-                    }
-                },
-                onRetry = { navController.navigate(NavRoute.EnvironmentSession.route) },
             )
         }
 
@@ -203,5 +189,12 @@ private fun NavHostController.navigateToMainTab(route: String) {
         popUpTo(NavRoute.Dashboard.route) {
             saveState = true
         }
+    }
+}
+
+private fun NavHostController.navigateHomeAfterSession() {
+    navigate(NavRoute.Dashboard.route) {
+        popUpTo(NavRoute.Dashboard.route)
+        launchSingleTop = true
     }
 }
