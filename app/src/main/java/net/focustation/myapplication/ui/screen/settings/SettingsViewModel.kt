@@ -7,8 +7,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 data class SettingsUiState(
-    val userName: String = "김예찬",
-    val userEmail: String = "user@focustation.net",
+    val userName: String = "",
+    val userEmail: String = "",
     val sensorSamplingSeconds: Int = 5,
     val focusDropAlertEnabled: Boolean = true,
     val sessionCompleteAlertEnabled: Boolean = true,
