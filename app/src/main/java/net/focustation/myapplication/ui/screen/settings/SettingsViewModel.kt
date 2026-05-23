@@ -14,7 +14,6 @@ data class SettingsUiState(
     val sessionCompleteAlertEnabled: Boolean = true,
     val isDarkTheme: Boolean = false,
     val anonymousUploadEnabled: Boolean = false,
-    val localStorageMb: Int = 42,
 )
 
 class SettingsViewModel(
@@ -50,10 +49,6 @@ class SettingsViewModel(
 
     fun toggleAnonymousUpload(enabled: Boolean) {
         _uiState.value = _uiState.value.copy(anonymousUploadEnabled = enabled)
-    }
-
-    fun clearLocalStorage() {
-        _uiState.value = _uiState.value.copy(localStorageMb = 0)
     }
 
     fun signOut() {

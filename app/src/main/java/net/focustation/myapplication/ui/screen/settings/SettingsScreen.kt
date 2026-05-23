@@ -29,7 +29,6 @@ import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Sensors
-import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -40,7 +39,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -135,23 +133,6 @@ fun SettingsScreen(
 
                 SettingsGroup(title = "데이터 & 테마") {
                     SettingsItemColumn {
-                        ActionListItem(
-                            icon = Icons.Filled.Storage,
-                            title = "로컬 저장 용량",
-                            subtitle = "${uiState.localStorageMb} MB 사용 중",
-                            trailing = {
-                                TextButton(
-                                    onClick = viewModel::clearLocalStorage,
-                                    colors =
-                                        ButtonDefaults.textButtonColors(
-                                            contentColor = MaterialTheme.colorScheme.error,
-                                        ),
-                                ) {
-                                    Text("초기화", style = MaterialTheme.typography.labelMedium)
-                                }
-                            },
-                        )
-                        ItemDivider()
                         ToggleListItem(
                             icon = Icons.Filled.CloudUpload,
                             title = "익명 업로드",
