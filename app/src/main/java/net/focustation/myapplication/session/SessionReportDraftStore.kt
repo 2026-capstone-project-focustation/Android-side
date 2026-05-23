@@ -35,6 +35,13 @@ object SessionReportDraftStore {
     }
 
     @Synchronized
+    fun clearIfCurrent(draft: SessionReportDraft) {
+        if (latestDraft === draft) {
+            latestDraft = null
+        }
+    }
+
+    @Synchronized
     fun consume(): SessionReportDraft? =
         latestDraft.also {
             if (it == null) {

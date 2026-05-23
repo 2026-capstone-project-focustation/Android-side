@@ -520,8 +520,10 @@ class FeedbackSessionViewModel : androidx.lifecycle.ViewModel() {
 
         val draft = SessionReportDraftStore.peek()
         if (draft == null) {
-            DebugLog.w("[Feedback][Save] No session draft. Navigating home.")
-            _uiState.update { it.copy(submitted = true) }
+            DebugLog.w("[Feedback][Save] No session draft.")
+            _uiState.update {
+                it.copy(saveErrorMessage = "세션 데이터를 찾지 못했어요. 저장하지 않고 나갈 수 있어요.")
+            }
             return
         }
 
@@ -544,7 +546,7 @@ class FeedbackSessionViewModel : androidx.lifecycle.ViewModel() {
 
             result.fold(
                 onSuccess = {
-                    SessionReportDraftStore.clear()
+                    SessionReportDraftStore.clearIfCurrent(draft)
                     _uiState.update {
                         it.copy(
                             isSaving = false,
