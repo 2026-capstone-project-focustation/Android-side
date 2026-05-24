@@ -1,6 +1,8 @@
 package net.focustation.myapplication.ui.screen.report
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,28 +14,29 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.outlined.AccessTime
+import androidx.compose.material.icons.outlined.Assessment
+import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -41,38 +44,45 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import net.focustation.myapplication.ui.components.FocusScreenBackground
 import net.focustation.myapplication.ui.components.MainBottomDestination
 import net.focustation.myapplication.ui.components.MainBottomNavigationBar
-import net.focustation.myapplication.ui.components.SessionSummaryCard
-import net.focustation.myapplication.ui.theme.ColorFocus
+import net.focustation.myapplication.ui.components.ProgressGaugeCard
+import net.focustation.myapplication.ui.components.ReferenceDesignTokens
+import net.focustation.myapplication.ui.components.StatCard
+import net.focustation.myapplication.ui.theme.FocusBlue
+import net.focustation.myapplication.ui.theme.FocusCanvas
+import net.focustation.myapplication.ui.theme.FocusInk
+import net.focustation.myapplication.ui.theme.FocusLine
+import net.focustation.myapplication.ui.theme.FocusMuted
+import net.focustation.myapplication.ui.theme.FocusSurface
+import net.focustation.myapplication.ui.theme.FocusYellow
 import net.focustation.myapplication.ui.theme.FocustationTheme
-import net.focustation.myapplication.ui.theme.Primary40
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SessionReportScreen(
-    onBack: () -> Unit,
-    onRetry: () -> Unit,
     onHistoryItemClick: (String) -> Unit,
     onNavigateToHome: () -> Unit = {},
     onNavigateToSpaceHistory: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
-    isFromActiveSession: Boolean = false,
     viewModel: SessionReportViewModel = viewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    LaunchedEffect(isFromActiveSession) {
-        viewModel.onScreenEntered(isFromActiveSession)
+    LaunchedEffect(Unit) {
+        viewModel.onScreenEntered()
     }
 
     LaunchedEffect(uiState.deleteFeedbackMessage) {
@@ -81,7 +91,21 @@ fun SessionReportScreen(
         viewModel.consumeDeleteFeedbackMessage()
     }
 
+    val sortedHistory =
+        remember(uiState.history, uiState.sortOption) { uiState.history.sortedBy(uiState.sortOption) }
+    val averageScore =
+        if (uiState.history.isNotEmpty()) {
+            uiState.history
+                .map { it.focusScore }
+                .average()
+                .toFloat()
+        } else {
+            0f
+        }
+    val totalMinutes = uiState.history.sumOf { it.durationMinutes }
+
     Scaffold(
+        containerColor = FocusCanvas,
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         bottomBar = {
             MainBottomNavigationBar(
@@ -96,267 +120,422 @@ fun SessionReportScreen(
                 },
             )
         },
-        topBar = {
-            TopAppBar(
-                title = { Text("공부 리포트", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로")
-                    }
-                },
-                colors =
-                    TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color(0xFF0D1B4B),
-                        titleContentColor = Color.White,
-                        navigationIconContentColor = Color.White,
-                    ),
-            )
-        },
     ) { paddingValues ->
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .verticalScroll(rememberScrollState())
-                    .background(MaterialTheme.colorScheme.background)
-                    .padding(horizontal = 16.dp),
-        ) {
-            Spacer(Modifier.height(16.dp))
-
-            SessionStatusCard(
-                isFromActiveSession = isFromActiveSession,
-                isSavingSession = uiState.isSavingSession,
-                sessionSaved = uiState.sessionSaved,
-                totalFocusMinutes = uiState.totalFocusMinutes,
-                avgEnvironmentScore = uiState.avgEnvironmentScore,
-                avgNoise = uiState.avgNoise,
-                avgIlluminance = uiState.avgIlluminance,
-            )
-
-            if (isFromActiveSession) {
-                Spacer(Modifier.height(12.dp))
-                PlaceSaveCard(
-                    placeName = uiState.placeName,
-                    placeSaved = uiState.placeSaved,
-                    isSavingPlace = uiState.isSavingPlace,
-                    onSavePlace = viewModel::savePlace,
-                    onRetry = onRetry,
-                )
-            }
-
-            if (!uiState.errorMessage.isNullOrBlank()) {
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    text = uiState.errorMessage ?: "저장 중 오류가 발생했어요.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-
-            Spacer(Modifier.height(16.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+        FocusScreenBackground {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = paddingValues.calculateBottomPadding() + 44.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                Text(
-                    text = "전체 공부 내역",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                )
-                IconButton(
-                    onClick = viewModel::refreshHistory,
-                    enabled = !uiState.isLoadingHistory,
-                ) {
-                    if (uiState.isLoadingHistory) {
-                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                    } else {
-                        Icon(Icons.Filled.Refresh, contentDescription = "목록 새로고침")
-                    }
+                item {
+                    ReportArchiveHero()
                 }
-            }
-            Spacer(Modifier.height(8.dp))
 
-            when {
-                uiState.isLoadingHistory -> {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
-                        contentAlignment = Alignment.Center,
+                item {
+                    Row(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                        StatCard(
+                            value = uiState.history.size.toString(),
+                            label = "저장 세션",
+                            icon = Icons.Outlined.FolderOpen,
+                            iconColor = FocusBlue,
+                            modifier = Modifier.weight(1f),
+                        )
+                        StatCard(
+                            value = totalMinutes.formatTotalTime(),
+                            label = "누적 시간",
+                            icon = Icons.Outlined.AccessTime,
+                            iconColor = FocusYellow,
+                            modifier = Modifier.weight(1f),
+                        )
                     }
                 }
 
-                uiState.historyErrorMessage != null -> {
-                    Text(
-                        text = uiState.historyErrorMessage ?: "기록을 불러오지 못했어요.",
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+                item {
+                    Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                        ProgressGaugeCard(
+                            title = "평균 환경적합도 점수",
+                            subtitle =
+                                if (uiState.history.isEmpty()) {
+                                    "저장된 세션이 생기면 평균 점수가 표시돼요."
+                                } else {
+                                    "저장된 ${uiState.history.size}개 세션의 평균은 ${averageScore.toInt()}점이에요."
+                                },
+                            percent = (averageScore / 100f).coerceIn(0f, 1f),
+                        )
+                    }
                 }
 
-                uiState.history.isEmpty() -> {
-                    Text(
-                        text = "저장된 공부 기록이 아직 없어요.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                item {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                        ArchiveSectionHeader(
+                            title = "세션 보관함",
+                            onRefresh = viewModel::refreshHistory,
+                        )
+                        Spacer(Modifier.height(14.dp))
+                        ReportSortChips(
+                            selected = uiState.sortOption,
+                            onSortChange = viewModel::setSortOption,
+                        )
+                    }
                 }
 
-                else -> {
-                    uiState.history.forEach { item ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            SessionSummaryCard(
-                                date = formatDate(item.endedAtEpochMillis),
-                                place = item.placeName,
-                                focusScore = item.focusScore,
-                                durationMin = item.durationMinutes,
-                                onClick = { onHistoryItemClick(item.sessionId) },
-                                modifier = Modifier.weight(1f),
-                            )
-                            OutlinedButton(
-                                onClick = { viewModel.hideHistoryItem(item.sessionId) },
-                                enabled = !uiState.deletingSessionIds.contains(item.sessionId),
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
-                            ) {
-                                Text(
-                                    if (uiState.deletingSessionIds.contains(item.sessionId)) {
-                                        "삭제 중..."
-                                    } else {
-                                        "삭제"
-                                    },
+                when {
+                    uiState.isLoadingHistory -> {
+                        item { ArchiveLoadingState() }
+                    }
+
+                    uiState.historyErrorMessage != null -> {
+                        item {
+                            Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                                ErrorState(
+                                    message = uiState.historyErrorMessage ?: "기록을 불러오지 못했어요.",
+                                    onRefresh = viewModel::refreshHistory,
                                 )
                             }
                         }
-                        Spacer(Modifier.height(8.dp))
+                    }
+
+                    sortedHistory.isEmpty() -> {
+                        item {
+                            Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                                EmptyArchiveState()
+                            }
+                        }
+                    }
+
+                    else -> {
+                        items(sortedHistory, key = { it.sessionId }) { historyItem ->
+                            Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                                SessionReportCard(
+                                    item = historyItem,
+                                    isDeleting = uiState.deletingSessionIds.contains(historyItem.sessionId),
+                                    onClick = { onHistoryItemClick(historyItem.sessionId) },
+                                )
+                            }
+                        }
                     }
                 }
             }
-
-            Spacer(Modifier.height(24.dp))
         }
     }
 }
 
 @Composable
-private fun SessionStatusCard(
-    isFromActiveSession: Boolean,
-    isSavingSession: Boolean,
-    sessionSaved: Boolean,
-    totalFocusMinutes: Int,
-    avgEnvironmentScore: Float,
-    avgNoise: Float,
-    avgIlluminance: Float,
-) {
-    val statusText =
-        when {
-            isSavingSession -> "세션 기록 저장 중..."
-            sessionSaved && isFromActiveSession -> "이번 세션이 저장되었습니다."
-            else -> "로그인한 계정의 누적 기록을 보여줍니다."
-        }
-
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+private fun ReportArchiveHero() {
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp))
+                .background(FocusInk)
+                .statusBarsPadding()
+                .padding(start = 20.dp, top = 20.dp, end = 16.dp, bottom = 24.dp),
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(text = statusText, style = MaterialTheme.typography.bodyMedium)
-            Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SummaryBadge(label = "집중 시간", value = "${totalFocusMinutes}분", modifier = Modifier.weight(1f))
-                SummaryBadge(
-                    label = "환경 점수",
-                    value = "${avgEnvironmentScore.toInt()}점",
-                    modifier = Modifier.weight(1f),
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "리포트 보관함",
+                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
+                    color = Color.White,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "지금까지 나의 집중 여정을 한눈에 살펴봐요",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White.copy(alpha = 0.62f),
                 )
             }
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SummaryBadge(label = "평균 소음", value = "${avgNoise.toInt()} dB", modifier = Modifier.weight(1f))
-                SummaryBadge(label = "평균 조도", value = "${avgIlluminance.toInt()} lux", modifier = Modifier.weight(1f))
+            Spacer(Modifier.width(12.dp))
+            Box(
+                modifier =
+                    Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(FocusYellow),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Assessment,
+                    contentDescription = null,
+                    tint = FocusInk,
+                )
             }
         }
     }
 }
 
 @Composable
-private fun PlaceSaveCard(
-    placeName: String,
-    placeSaved: Boolean,
-    isSavingPlace: Boolean,
-    onSavePlace: () -> Unit,
-    onRetry: () -> Unit,
+private fun ArchiveSectionHeader(
+    title: String,
+    onRefresh: () -> Unit,
 ) {
-    val normalizedPlaceName = placeName.ifBlank { "장소 미지정" }
-
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(2.dp),
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("이번 세션 장소", style = MaterialTheme.typography.labelLarge)
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = normalizedPlaceName,
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            color = FocusInk,
+        )
+        IconButton(
+            onClick = onRefresh,
+            modifier =
+                Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(ReferenceDesignTokens.PaleBlueTrack),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Refresh,
+                contentDescription = "세션 보관함 새로고침",
+                tint = FocusInk,
+                modifier = Modifier.size(18.dp),
             )
-            Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button(
-                    onClick = onSavePlace,
-                    enabled = !isSavingPlace && !placeSaved && placeName.isNotBlank(),
-                    colors = ButtonDefaults.buttonColors(containerColor = if (placeSaved) ColorFocus else Primary40),
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(vertical = 12.dp),
-                ) {
+        }
+    }
+}
+
+@Composable
+private fun ReportSortChips(
+    selected: ReportSortOption,
+    onSortChange: (ReportSortOption) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
+        ReportSortOption.entries.forEach { option ->
+            val isSelected = selected == option
+            FilterChip(
+                selected = isSelected,
+                onClick = { onSortChange(option) },
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(12.dp),
+                label = {
                     Text(
-                        when {
-                            placeSaved -> "장소 저장됨"
-                            isSavingPlace -> "저장 중..."
-                            placeName.isBlank() -> "장소 정보 없음"
-                            else -> "장소 저장"
-                        },
+                        text = option.label(),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth(),
                     )
-                }
-                OutlinedButton(
-                    onClick = onRetry,
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(vertical = 12.dp),
-                ) {
-                    Text("재측정")
-                }
+                },
+                colors =
+                    FilterChipDefaults.filterChipColors(
+                        containerColor = FocusSurface,
+                        labelColor = FocusMuted,
+                        selectedContainerColor = FocusInk,
+                        selectedLabelColor = Color.White,
+                    ),
+                border =
+                    FilterChipDefaults.filterChipBorder(
+                        enabled = true,
+                        selected = isSelected,
+                        borderColor = FocusLine,
+                        selectedBorderColor = FocusInk,
+                    ),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SessionReportCard(
+    item: StudyHistoryUiItem,
+    isDeleting: Boolean,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(enabled = !isDeleting, onClick = onClick),
+        shape = RoundedCornerShape(18.dp),
+        color = FocusSurface,
+        border = BorderStroke(1.dp, FocusLine),
+        shadowElevation = 0.dp,
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            ScoreBadge(score = item.focusScore)
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = item.placeName.ifBlank { "장소 미지정" },
+                    color = FocusInk,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = formatDate(item.endedAtEpochMillis),
+                    color = FocusMuted,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                )
+            }
+            Box(
+                modifier =
+                    Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(ReferenceDesignTokens.PaleBlueTrack),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = "상세 보기",
+                    tint = FocusInk,
+                    modifier = Modifier.size(20.dp),
+                )
             }
         }
     }
 }
 
 @Composable
-private fun SummaryBadge(
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier,
-) {
-    Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background),
+private fun ScoreBadge(score: Int) {
+    Box(
+        modifier =
+            Modifier
+                .size(54.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(scoreTint(score)),
+        contentAlignment = Alignment.Center,
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(text = value, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
-            Spacer(Modifier.height(2.dp))
+        Text(
+            text = score.toString(),
+            color = FocusInk,
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+        )
+    }
+}
+
+@Composable
+private fun ArchiveLoadingState() {
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 36.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        CircularProgressIndicator(modifier = Modifier.size(28.dp), color = FocusBlue)
+    }
+}
+
+@Composable
+private fun ErrorState(
+    message: String,
+    onRefresh: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = FocusSurface,
+        border = BorderStroke(1.dp, FocusLine),
+        shadowElevation = 0.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 22.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
             Text(
-                text = label,
+                text = message,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Center,
+            )
+            Surface(
+                modifier = Modifier.clickable(onClick = onRefresh),
+                shape = CircleShape,
+                color = ReferenceDesignTokens.PaleBlueTrack,
+            ) {
+                Text(
+                    text = "다시 불러오기",
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp),
+                    color = FocusBlue,
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyArchiveState() {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = FocusSurface,
+        border = BorderStroke(1.dp, FocusLine),
+        shadowElevation = 0.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(7.dp),
+        ) {
+            Text(
+                text = "저장된 리포트가 아직 없어요",
+                color = FocusInk,
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+            )
+            Text(
+                text = "환경 측정과 집중 세션을 완료하면 이곳에 기록이 쌓여요.",
+                color = FocusMuted,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
             )
         }
     }
 }
+
+private fun Int.formatTotalTime(): String {
+    val safeMinutes = coerceAtLeast(0)
+    return "${safeMinutes / 60}h ${safeMinutes % 60}m"
+}
+
+private fun List<StudyHistoryUiItem>.sortedBy(option: ReportSortOption): List<StudyHistoryUiItem> =
+    when (option) {
+        ReportSortOption.LATEST -> sortedByDescending { it.endedAtEpochMillis }
+        ReportSortOption.SCORE_HIGH -> sortedByDescending { it.focusScore }
+        ReportSortOption.DURATION_LONG -> sortedByDescending { it.durationMinutes }
+        ReportSortOption.PLACE_NAME -> sortedBy { it.placeName }
+    }
+
+private fun ReportSortOption.label(): String =
+    when (this) {
+        ReportSortOption.LATEST -> "최신순"
+        ReportSortOption.SCORE_HIGH -> "점수순"
+        ReportSortOption.DURATION_LONG -> "긴 시간순"
+        ReportSortOption.PLACE_NAME -> "장소순"
+    }
+
+private fun scoreTint(score: Int): Color =
+    when {
+        score >= 85 -> ReferenceDesignTokens.PaleBlueTrack
+        score >= 70 -> Color(0xFFFFF2D7)
+        else -> Color(0xFFF1E8FF)
+    }
 
 private fun formatDate(epochMillis: Long): String {
     if (epochMillis <= 0L) return "날짜 미상"
@@ -368,6 +547,6 @@ private fun formatDate(epochMillis: Long): String {
 @Composable
 private fun SessionReportPreview() {
     FocustationTheme {
-        SessionReportScreen(onBack = {}, onRetry = {}, onHistoryItemClick = {})
+        SessionReportScreen(onHistoryItemClick = {})
     }
 }

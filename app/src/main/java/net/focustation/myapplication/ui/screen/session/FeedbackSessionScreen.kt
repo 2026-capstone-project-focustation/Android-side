@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -11,17 +13,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import net.focustation.myapplication.ui.components.StarRatingSelector
+import net.focustation.myapplication.ui.theme.FocusInk
+import net.focustation.myapplication.ui.theme.FocusLine
+import net.focustation.myapplication.ui.theme.FocusSurface
 import net.focustation.myapplication.ui.theme.FocustationTheme
-import net.focustation.myapplication.ui.theme.Primary40
 
 @Composable
 fun FeedbackSessionScreen(
     onSubmit: () -> Unit,
-    onSkip: () -> Unit,
     viewModel: FeedbackSessionViewModel = viewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -30,19 +33,27 @@ fun FeedbackSessionScreen(
         if (uiState.submitted) onSubmit()
     }
 
-    // 모달 다이얼로그 형태로 표시
-    Dialog(onDismissRequest = onSkip) {
+    // 모달 다이얼로그 — 명시 버튼으로만 닫히도록 고정 (바깥 탭/뒤로가기 차단)
+    Dialog(
+        onDismissRequest = {},
+        properties =
+            DialogProperties(
+                dismissOnClickOutside = false,
+                dismissOnBackPress = false,
+            ),
+    ) {
         Card(
             modifier =
                 Modifier
                     .fillMaxWidth()
                     .wrapContentHeight(),
-            shape = RoundedCornerShape(24.dp),
+            shape = RoundedCornerShape(12.dp),
             colors =
                 CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
+                    containerColor = FocusSurface,
                 ),
-            elevation = CardDefaults.cardElevation(8.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, FocusLine),
+            elevation = CardDefaults.cardElevation(0.dp),
         ) {
             Column(
                 modifier =
@@ -51,7 +62,7 @@ fun FeedbackSessionScreen(
                         .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Text("📝", fontSize = 40.sp)
+                Icon(Icons.Filled.EditNote, contentDescription = null, tint = FocusInk, modifier = Modifier.size(42.dp))
                 Spacer(Modifier.height(8.dp))
                 Text(
                     text = "세션 피드백",
@@ -62,7 +73,7 @@ fun FeedbackSessionScreen(
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
-                    text = "이번 세션은 어떠셨나요? (선택사항)",
+                    text = "이번 세션은 어떠셨나요?",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -110,26 +121,44 @@ fun FeedbackSessionScreen(
                 // 버튼
                 Button(
                     onClick = { viewModel.submit() },
+                    enabled = !uiState.isSaving,
                     modifier =
                         Modifier
                             .fillMaxWidth()
                             .height(52.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Primary40),
-                ) {
-                    Text("제출하기", style = MaterialTheme.typography.labelLarge)
-                }
-
-                Spacer(Modifier.height(10.dp))
-
-                TextButton(
-                    onClick = onSkip,
-                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = FocusInk),
                 ) {
                     Text(
-                        text = "건너뛰기",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        text =
+                            when {
+                                uiState.isSaving -> "저장 중..."
+                                uiState.saveErrorMessage != null -> "다시 시도"
+                                else -> "리포트 저장하기"
+                            },
+                        style = MaterialTheme.typography.labelLarge,
                     )
+                }
+
+                // 저장 실패는 시스템 오류 → 실패 상황에 한해 탈출구를 노출한다.
+                uiState.saveErrorMessage?.let { message ->
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    TextButton(
+                        onClick = onSubmit,
+                        enabled = !uiState.isSaving,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = "저장하지 않고 나가기",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
         }
@@ -182,6 +211,6 @@ private fun FeedbackQuestion(
 @Composable
 private fun FeedbackSessionPreview() {
     FocustationTheme {
-        FeedbackSessionScreen(onSubmit = {}, onSkip = {})
+        FeedbackSessionScreen(onSubmit = {})
     }
 }

@@ -21,6 +21,10 @@ import net.focustation.myapplication.ui.theme.ColorFocus
 import net.focustation.myapplication.ui.theme.ColorLight
 import net.focustation.myapplication.ui.theme.ColorNoise
 import net.focustation.myapplication.ui.theme.ColorVibration
+import net.focustation.myapplication.ui.theme.FocusInk
+import net.focustation.myapplication.ui.theme.FocusLine
+import net.focustation.myapplication.ui.theme.FocusMuted
+import net.focustation.myapplication.ui.theme.FocusSurface
 
 // ─── 환경 지표 카드 (소음, 조도, 진동) ──────────────────────────────────────
 
@@ -43,17 +47,18 @@ fun EnvMetricCard(
 ) {
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(12.dp),
         colors =
             CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                containerColor = FocusSurface,
             ),
-        elevation = CardDefaults.cardElevation(2.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, FocusLine),
+        elevation = CardDefaults.cardElevation(0.dp),
     ) {
         Column(
             modifier =
                 Modifier
-                    .padding(horizontal = 12.dp, vertical = 14.dp)
+                    .padding(horizontal = 12.dp, vertical = 16.dp)
                     .fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -68,18 +73,18 @@ fun EnvMetricCard(
             Text(
                 text = value,
                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurface,
+                color = FocusInk,
             )
             Text(
                 text = unit,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = FocusMuted,
             )
             Spacer(Modifier.height(2.dp))
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = FocusMuted,
             )
         }
     }
@@ -150,7 +155,7 @@ fun FocusScoreGauge(
         androidx.compose.foundation.Canvas(modifier = Modifier.matchParentSize()) {
             val strokeWidth = 14.dp.toPx()
             drawArc(
-                color = Color(0x22FFFFFF),
+                color = FocusLine,
                 startAngle = 140f,
                 sweepAngle = 260f,
                 useCenter = false,
@@ -177,7 +182,7 @@ fun FocusScoreGauge(
             Text(
                 text = "/ 100",
                 fontSize = (size.value * 0.10f).sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = FocusMuted,
             )
         }
     }
@@ -224,13 +229,14 @@ fun SessionSummaryCard(
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(12.dp),
         onClick = onClick,
         colors =
             CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                containerColor = FocusSurface,
             ),
-        elevation = CardDefaults.cardElevation(2.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, FocusLine),
+        elevation = CardDefaults.cardElevation(0.dp),
     ) {
         Row(
             modifier =
@@ -241,16 +247,16 @@ fun SessionSummaryCard(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = place,
+                    text = place.ifBlank { "장소 미지정" },
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = FocusInk,
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = "$date · ${durationMin}분",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = FocusMuted,
                 )
             }
             Spacer(Modifier.width(12.dp))
@@ -263,7 +269,7 @@ fun SessionSummaryCard(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = "$focusScore",
+                    text = "${focusScore}점",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
                     color = ColorFocus,

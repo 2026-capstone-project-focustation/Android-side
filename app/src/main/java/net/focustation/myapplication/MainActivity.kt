@@ -33,7 +33,14 @@ class MainActivity : ComponentActivity() {
             DebugLog.w("NAVER_MAP_MCP_ID is empty. Check local.properties or gradle.properties.")
         } else {
             runCatching {
-                NaverMapSdk.getInstance(this).client = NaverMapSdk.NcpKeyClient(naverMapMcpId)
+                val sdk = NaverMapSdk.getInstance(this)
+                sdk.client = NaverMapSdk.NcpKeyClient(naverMapMcpId)
+                sdk.setOnAuthFailedListener { authException ->
+                    DebugLog.e(
+                        "NaverMap 인증 실패 — 키 값과 NCP 콘솔의 앱 패키지명 등록을 확인하세요: ${authException.message}",
+                        authException,
+                    )
+                }
                 DebugLog.d("NaverMapSdk Client configured successfully")
             }.onFailure { e ->
                 DebugLog.e("Failed to configure NaverMapSdk Client", e)

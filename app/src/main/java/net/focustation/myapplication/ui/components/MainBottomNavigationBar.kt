@@ -1,10 +1,19 @@
 package net.focustation.myapplication.ui.components
 
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Insights
+import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
 
 enum class MainBottomDestination {
     HOME,
@@ -17,20 +26,34 @@ enum class MainBottomDestination {
 fun MainBottomNavigationBar(
     selected: MainBottomDestination,
     onTabClick: (MainBottomDestination) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    NavigationBar {
-        MainBottomDestination.entries.forEach { destination ->
-            NavigationBarItem(
-                selected = selected == destination,
-                onClick = {
+    val destinations = MainBottomDestination.entries
+    Box(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(bottom = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        ReferenceBottomNavigationBar(
+            selectedIndex = destinations.indexOf(selected).coerceAtLeast(0),
+            items =
+                destinations.map { destination ->
+                    NavItemSlot(
+                        icon = destination.icon(),
+                        contentDescription = destination.label(),
+                    )
+                },
+            onItemClick = { index ->
+                destinations.getOrNull(index)?.let { destination ->
                     if (selected != destination) {
                         onTabClick(destination)
                     }
-                },
-                icon = { Text(destination.icon(), fontSize = 20.sp) },
-                label = { Text(destination.label()) },
-            )
-        }
+                }
+            },
+        )
     }
 }
 
@@ -42,10 +65,10 @@ private fun MainBottomDestination.label(): String =
         MainBottomDestination.SETTINGS -> "설정"
     }
 
-private fun MainBottomDestination.icon(): String =
+private fun MainBottomDestination.icon(): ImageVector =
     when (this) {
-        MainBottomDestination.HOME -> "🏠"
-        MainBottomDestination.REPORT -> "📊"
-        MainBottomDestination.MAP -> "🗺️"
-        MainBottomDestination.SETTINGS -> "⚙️"
+        MainBottomDestination.HOME -> Icons.Filled.Home
+        MainBottomDestination.REPORT -> Icons.Filled.Insights
+        MainBottomDestination.MAP -> Icons.Filled.Map
+        MainBottomDestination.SETTINGS -> Icons.Filled.Settings
     }

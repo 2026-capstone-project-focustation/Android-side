@@ -16,7 +16,8 @@ data class LoginUiState(
 class LoginViewModel(
     private val firebaseAuthProvider: () -> FirebaseAuth = { FirebaseAuth.getInstance() },
 ) : ViewModel() {
-    private val firebaseAuth by lazy { firebaseAuthProvider() }
+    private val firebaseAuth: FirebaseAuth? =
+        runCatching { firebaseAuthProvider() }.getOrNull()
     private val authStateListener =
         FirebaseAuth.AuthStateListener { auth ->
             if (auth.currentUser != null) {
@@ -33,10 +34,12 @@ class LoginViewModel(
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
 
     init {
-        firebaseAuth.addAuthStateListener(authStateListener)
+        firebaseAuth?.let { auth ->
+            auth.addAuthStateListener(authStateListener)
 
-        if (firebaseAuth.currentUser != null) {
-            _uiState.value = _uiState.value.copy(isLoggedIn = true)
+            if (auth.currentUser != null) {
+                _uiState.value = _uiState.value.copy(isLoggedIn = true)
+            }
         }
     }
 
@@ -45,13 +48,19 @@ class LoginViewModel(
     }
 
     fun onGoogleIdTokenReceived(idToken: String?) {
+        val auth = firebaseAuth
+        if (auth == null) {
+            onGoogleLoginFailed("Firebase 설정이 아직 연결되지 않았어요. google-services.json 설정을 확인해주세요.")
+            return
+        }
+
         if (idToken.isNullOrBlank()) {
             onGoogleLoginFailed("Google ID 토큰을 가져오지 못했어요. 다시 시도해주세요.")
             return
         }
 
         val credential = GoogleAuthProvider.getCredential(idToken, null)
-        firebaseAuth
+        auth
             .signInWithCredential(credential)
             .addOnCompleteListener { task ->
                 if (task.isSuccessful) {
@@ -81,7 +90,7 @@ class LoginViewModel(
     }
 
     override fun onCleared() {
-        firebaseAuth.removeAuthStateListener(authStateListener)
+        firebaseAuth?.removeAuthStateListener(authStateListener)
         super.onCleared()
     }
 }

@@ -25,3 +25,20 @@ google-services.json
 # 로그 및 임시 파일
 *.log
 /out
+
+# Local design references and source assets
+/.claude/
+/active_learning_float_lottie.json
+/analyzing_progress_floating_lottie.json
+/celebration_floating_lottie.json
+/mascot_goal_achieved_pink_lottie.json
+/mascot_lightpink_celebration_particles_lottie.json
+/mascot_lightpink_float_only_lottie.json
+/poki_xeyes_float_lottie*.json
+/reading_book_lightpink_float_lottie.json
+/teamwork_palette_floating_lottie.json
+/character asset*.png
+/goal.png
+/focustation design reference.jpg
+/ui ex.jpg
+/ux ex*.jpg

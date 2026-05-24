@@ -40,6 +40,8 @@ data class StudySessionRecord(
     val avgIlluminance: Float,
     val avgVibration: Double,
     val placeName: String,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
     val focusTimeline: List<FocusDataPoint> = emptyList(),
 )
 
@@ -184,6 +186,8 @@ class FirestoreStudyRepository(
                             avgIlluminance = (doc.getDouble("avgIlluminance") ?: 0.0).toFloat(),
                             avgVibration = doc.getDouble("avgVibration") ?: 0.0,
                             placeName = placeSnapshot?.get("name") as? String ?: "장소 미지정",
+                            latitude = (placeSnapshot?.get("latitude") as? Number)?.toDouble(),
+                            longitude = (placeSnapshot?.get("longitude") as? Number)?.toDouble(),
                             focusTimeline = parseFocusTimeline(doc.get("focusTimeline")),
                         )
                     }
@@ -221,6 +225,8 @@ class FirestoreStudyRepository(
                     avgIlluminance = (document.getDouble("avgIlluminance") ?: 0.0).toFloat(),
                     avgVibration = document.getDouble("avgVibration") ?: 0.0,
                     placeName = placeSnapshot?.get("name") as? String ?: "장소 미지정",
+                    latitude = (placeSnapshot?.get("latitude") as? Number)?.toDouble(),
+                    longitude = (placeSnapshot?.get("longitude") as? Number)?.toDouble(),
                     focusTimeline = parseFocusTimeline(document.get("focusTimeline")),
                 )
             DebugLog.d(

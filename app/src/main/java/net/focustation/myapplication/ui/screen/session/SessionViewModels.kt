@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import net.focustation.myapplication.data.model.EnvironmentSnapshot
 import net.focustation.myapplication.data.model.FocusDataPoint
+import net.focustation.myapplication.data.repository.FirestoreStudyRepository
+import net.focustation.myapplication.data.repository.StudySessionSaveRequest
 import net.focustation.myapplication.score.ScoreCalculator
 import net.focustation.myapplication.sensor.LightSensorManager
 import net.focustation.myapplication.sensor.NoiseSensorManager
@@ -467,10 +469,13 @@ data class FeedbackUiState(
     val question1: Int = 3, // 1=매우 불만족 ~ 5=매우 만족
     val question2: Int = 3,
     val question3: Int = 3,
+    val isSaving: Boolean = false,
+    val saveErrorMessage: String? = null,
     val submitted: Boolean = false,
 )
 
 class FeedbackSessionViewModel : androidx.lifecycle.ViewModel() {
+    private val repository = FirestoreStudyRepository()
     private val _uiState = MutableStateFlow(FeedbackUiState())
     val uiState: StateFlow<FeedbackUiState> = _uiState.asStateFlow()
 
@@ -510,10 +515,56 @@ class FeedbackSessionViewModel : androidx.lifecycle.ViewModel() {
         _uiState.update { it.copy(question3 = score) }
     }
 
-    /**
-     * Marks the feedback as submitted in the view model's UI state.
-     */
     fun submit() {
-        _uiState.update { it.copy(submitted = true) }
+        if (_uiState.value.isSaving || _uiState.value.submitted) return
+
+        val draft = SessionReportDraftStore.peek()
+        if (draft == null) {
+            DebugLog.w("[Feedback][Save] No session draft.")
+            _uiState.update {
+                it.copy(saveErrorMessage = "세션 데이터를 찾지 못했어요. 저장하지 않고 나갈 수 있어요.")
+            }
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSaving = true, saveErrorMessage = null) }
+            val result =
+                repository.saveStudySession(
+                    StudySessionSaveRequest(
+                        totalFocusMinutes = draft.totalFocusMinutes,
+                        avgEnvironmentScore = draft.avgEnvironmentScore,
+                        avgNoise = draft.avgNoise,
+                        avgIlluminance = draft.avgIlluminance,
+                        avgVibration = draft.avgVibration,
+                        focusTimeline = draft.focusTimeline,
+                        placeName = draft.placeName,
+                        latitude = draft.placeLatitude,
+                        longitude = draft.placeLongitude,
+                    ),
+                )
+
+            result.fold(
+                onSuccess = {
+                    SessionReportDraftStore.clearIfCurrent(draft)
+                    _uiState.update {
+                        it.copy(
+                            isSaving = false,
+                            saveErrorMessage = null,
+                            submitted = true,
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    DebugLog.e("[Feedback][Save] Failed to save session: ${error.message}", error)
+                    _uiState.update {
+                        it.copy(
+                            isSaving = false,
+                            saveErrorMessage = error.message ?: "세션 기록 저장에 실패했어요.",
+                        )
+                    }
+                },
+            )
+        }
     }
 }
