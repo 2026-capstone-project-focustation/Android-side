@@ -49,7 +49,10 @@ android {
     val naverSearchClientId =
         (
             (project.findProperty("NAVER_SEARCH_CLIENT_ID") as String?)
-                ?: localProperties.getProperty("NAVER_SEARCH_CLIENT_ID", "")
+                ?: localProperties
+                    .getProperty("NAVER_SEARCH_CLIENT_ID", "")
+                    .ifBlank { localProperties.getProperty("NAVER_SEARCH_CLIENTID", "") }
+                    .ifBlank { localProperties.getProperty("NAVER_CLIENT_ID", "") }
         ).trim()
     val escapedNaverSearchClientId =
         naverSearchClientId
@@ -58,7 +61,10 @@ android {
     val naverSearchClientSecret =
         (
             (project.findProperty("NAVER_SEARCH_CLIENT_SECRET") as String?)
-                ?: localProperties.getProperty("NAVER_SEARCH_CLIENT_SECRET", "")
+                ?: localProperties
+                    .getProperty("NAVER_SEARCH_CLIENT_SECRET", "")
+                    .ifBlank { localProperties.getProperty("NAVER_SEARCH_CLIENTSECRET", "") }
+                    .ifBlank { localProperties.getProperty("NAVER_CLIENT_SECRET", "") }
         ).trim()
     val escapedNaverSearchClientSecret =
         naverSearchClientSecret

@@ -1,5 +1,6 @@
 package net.focustation.myapplication.data.repository
 
+import com.naver.maps.geometry.Tm128
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import net.focustation.myapplication.BuildConfig
@@ -14,6 +15,8 @@ data class NaverPlaceSearchResult(
     val category: String,
     val address: String,
     val roadAddress: String,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
 )
 
 class NaverPlaceSearchRepository(
@@ -79,15 +82,25 @@ class NaverPlaceSearchRepository(
             val item = items.optJSONObject(index) ?: return@mapNotNull null
             val name = item.optString("title").cleanNaverText()
             if (name.isBlank()) return@mapNotNull null
+            val latLng = item.toLatLngOrNull()
 
             NaverPlaceSearchResult(
                 name = name,
                 category = item.optString("category").cleanNaverText(),
                 address = item.optString("address").cleanNaverText(),
                 roadAddress = item.optString("roadAddress").cleanNaverText(),
+                latitude = latLng?.latitude,
+                longitude = latLng?.longitude,
             )
         }
     }
+
+    private fun JSONObject.toLatLngOrNull() =
+        runCatching {
+            val mapX = optString("mapx").toDoubleOrNull() ?: return@runCatching null
+            val mapY = optString("mapy").toDoubleOrNull() ?: return@runCatching null
+            Tm128(mapX, mapY).toLatLng().takeIf { it.isValid() }
+        }.getOrNull()
 
     private fun String.cleanNaverText(): String =
         replace(Regex("<[^>]*>"), "")
