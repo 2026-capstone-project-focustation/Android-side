@@ -34,6 +34,7 @@ class FirestoreSurveyRepository(
                     "source" to "android_app",
                     "modelInput" to response.modelInput,
                     "labels" to response.labels,
+                    "mlScore" to response.mlScore,
                     "submittedAt" to FieldValue.serverTimestamp(),
                     "updatedAt" to FieldValue.serverTimestamp(),
                 )

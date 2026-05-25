@@ -130,7 +130,7 @@ fun EnvironmentSessionScreen(
 
     LaunchedEffect(uiState.elapsedSeconds) {
         if (uiState.elapsedSeconds >= uiState.totalSessionSeconds && uiState.isRunning) {
-            onSessionComplete()
+            viewModel.completeSession()
         }
     }
 
@@ -156,6 +156,7 @@ fun EnvironmentSessionScreen(
                 score = uiState.environmentScore,
                 isRunning = uiState.isRunning,
                 isPaused = uiState.isPaused,
+                isCompleted = uiState.isCompleted,
             )
             EnvironmentMetricGrid(
                 noise = uiState.currentSnapshot.noiseLevel,
@@ -166,19 +167,30 @@ fun EnvironmentSessionScreen(
                 score = uiState.environmentScore,
                 isRunning = uiState.isRunning,
             )
+            if (uiState.isCompleted) {
+                EnvironmentResultCard(
+                    score = uiState.environmentScore,
+                    noise = uiState.currentSnapshot.noiseLevel,
+                    illuminance = uiState.currentSnapshot.illuminance,
+                    vibration = uiState.currentSnapshot.vibration,
+                )
+            }
             EnvironmentNoiseGraphCard(noiseHistory = uiState.noiseHistory)
             EnvironmentControlButtons(
                 isRunning = uiState.isRunning,
                 isPaused = uiState.isPaused,
+                isCompleted = uiState.isCompleted,
                 onStart = startSession,
                 onPause = viewModel::pauseSession,
                 onResume = viewModel::startSession,
                 onFinish = {
-                    if (uiState.isPaused) {
-                        viewModel.stopSession()
-                    }
-                    onSessionComplete()
+                    viewModel.completeSession()
                 },
+                onRetry = {
+                    viewModel.stopSession()
+                    startSession()
+                },
+                onContinue = onSessionComplete,
             )
         }
     }
@@ -228,6 +240,7 @@ private fun EnvironmentTimerCard(
     score: Float,
     isRunning: Boolean,
     isPaused: Boolean,
+    isCompleted: Boolean,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -256,9 +269,10 @@ private fun EnvironmentTimerCard(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     StatusPill(
-                        label = environmentStatusLabel(isRunning, isPaused),
+                        label = environmentStatusLabel(isRunning, isPaused, isCompleted),
                         color =
                             when {
+                                isCompleted -> ReferenceDesignTokens.Blue
                                 isRunning -> ReferenceDesignTokens.Yellow
                                 isPaused -> ReferenceDesignTokens.Blue
                                 else -> Color.White.copy(alpha = 0.24f)
@@ -271,7 +285,7 @@ private fun EnvironmentTimerCard(
                         style = MaterialTheme.typography.displayMedium.copy(fontWeight = FontWeight.Black),
                     )
                     Text(
-                        text = "30초 동안 소음, 조도, 진동을 함께 분석해요",
+                        text = "5분 동안 소음, 조도, 진동을 함께 분석해요",
                         color = Color.White.copy(alpha = 0.68f),
                         style = MaterialTheme.typography.bodySmall,
                     )
@@ -581,13 +595,87 @@ private fun EnvironmentNoiseGraphCard(noiseHistory: List<Float>) {
 }
 
 @Composable
+private fun EnvironmentResultCard(
+    score: Float,
+    noise: Float,
+    illuminance: Float,
+    vibration: Double,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = ReferenceDesignTokens.WhiteCard),
+        border = BorderStroke(1.dp, ReferenceDesignTokens.Border),
+        elevation = CardDefaults.cardElevation(0.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = "환경 측정 결과",
+                color = ReferenceDesignTokens.TextPrimary,
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
+            )
+            Text(
+                text = "현재 공간의 로컬 센서 기반 환경 점수는 ${"%.0f".format(score)}점이에요.",
+                color = ReferenceDesignTokens.TextSecondary,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                ResultMetric("소음", "%.0f dB".format(noise), Modifier.weight(1f))
+                ResultMetric("조도", "%.0f lux".format(illuminance), Modifier.weight(1f))
+                ResultMetric("진동", "%.3f".format(vibration), Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun ResultMetric(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(14.dp),
+        color = ReferenceDesignTokens.PaleBlueTrack,
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = value,
+                color = ReferenceDesignTokens.TextPrimary,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                maxLines = 1,
+            )
+            Text(
+                text = label,
+                color = ReferenceDesignTokens.TextSecondary,
+                style = MaterialTheme.typography.labelSmall,
+            )
+        }
+    }
+}
+
+@Composable
 private fun EnvironmentControlButtons(
     isRunning: Boolean,
     isPaused: Boolean,
+    isCompleted: Boolean,
     onStart: () -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
     onFinish: () -> Unit,
+    onRetry: () -> Unit,
+    onContinue: () -> Unit,
 ) {
     Row(
         modifier =
@@ -597,6 +685,37 @@ private fun EnvironmentControlButtons(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         when {
+            isCompleted -> {
+                OutlinedButton(
+                    onClick = onRetry,
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .height(56.dp),
+                    shape = RoundedCornerShape(18.dp),
+                    border = BorderStroke(1.dp, ReferenceDesignTokens.Border),
+                    colors =
+                        ButtonDefaults.outlinedButtonColors(
+                            contentColor = ReferenceDesignTokens.TextPrimary,
+                        ),
+                ) {
+                    Text("다시 측정", fontWeight = FontWeight.Bold)
+                }
+                Button(
+                    onClick = onContinue,
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .height(56.dp),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ReferenceDesignTokens.Dark),
+                ) {
+                    Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("집중 시작", fontWeight = FontWeight.ExtraBold)
+                }
+            }
+
             !isRunning && !isPaused -> {
                 Button(
                     onClick = onStart,
@@ -685,8 +804,10 @@ private fun EnvironmentControlButtons(
 private fun environmentStatusLabel(
     isRunning: Boolean,
     isPaused: Boolean,
+    isCompleted: Boolean,
 ): String =
     when {
+        isCompleted -> "측정 완료"
         isRunning -> "측정 중"
         isPaused -> "일시정지"
         else -> "대기 중"
@@ -713,7 +834,7 @@ private fun environmentSessionMessage(
     isRunning: Boolean,
 ): String =
     when {
-        score <= 0f && !isRunning -> "30초 동안 주변 환경을 측정해서 집중에 적합한지 분석할게요."
+        score <= 0f && !isRunning -> "5분 동안 주변 환경을 측정해서 집중에 적합한지 분석할게요."
         score >= 75f -> "현재 환경이 안정적이에요. 이 조건을 기록해두면 나중에 좋은 집중 장소를 찾는 기준이 됩니다."
         score >= 50f -> "소음, 조도, 진동 중 하나만 조정해도 집중 적합도가 더 좋아질 수 있어요."
         else -> "가능하다면 더 조용한 자리로 이동하거나 조명 반사를 줄인 뒤 다시 측정해보세요."

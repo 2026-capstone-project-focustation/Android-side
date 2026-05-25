@@ -372,7 +372,7 @@ private fun SessionReportCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            ScoreBadge(score = item.focusScore)
+            ScoreBadge(score = item.displayScore())
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -389,6 +389,13 @@ private fun SessionReportCard(
                     color = FocusMuted,
                     style = MaterialTheme.typography.labelSmall,
                     maxLines = 1,
+                )
+                Text(
+                    text = item.scoreSummaryLabel(),
+                    color = FocusMuted,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
             Box(
@@ -517,9 +524,18 @@ private fun Int.formatTotalTime(): String {
 private fun List<StudyHistoryUiItem>.sortedBy(option: ReportSortOption): List<StudyHistoryUiItem> =
     when (option) {
         ReportSortOption.LATEST -> sortedByDescending { it.endedAtEpochMillis }
-        ReportSortOption.SCORE_HIGH -> sortedByDescending { it.focusScore }
+        ReportSortOption.SCORE_HIGH -> sortedByDescending { it.displayScore() }
         ReportSortOption.DURATION_LONG -> sortedByDescending { it.durationMinutes }
         ReportSortOption.PLACE_NAME -> sortedBy { it.placeName }
+    }
+
+private fun StudyHistoryUiItem.displayScore(): Int = (mlScore?.toInt() ?: focusScore).coerceIn(0, 100)
+
+private fun StudyHistoryUiItem.scoreSummaryLabel(): String =
+    if (mlScore == null) {
+        "환경 ${focusScore}점"
+    } else {
+        "ML ${mlScore.toInt()}점 · 환경 ${focusScore}점"
     }
 
 private fun ReportSortOption.label(): String =
