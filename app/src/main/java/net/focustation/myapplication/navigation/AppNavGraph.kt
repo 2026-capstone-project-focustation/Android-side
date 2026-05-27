@@ -18,6 +18,7 @@ import net.focustation.myapplication.ui.screen.report.SessionReportScreen
 import net.focustation.myapplication.ui.screen.session.EnvironmentSessionScreen
 import net.focustation.myapplication.ui.screen.session.FeedbackSessionScreen
 import net.focustation.myapplication.ui.screen.session.FocusSessionScreen
+import net.focustation.myapplication.ui.screen.session.PlaceSelectionScreen
 import net.focustation.myapplication.ui.screen.settings.SettingsScreen
 import net.focustation.myapplication.ui.screen.space.SpaceHistoryScreen
 import net.focustation.myapplication.ui.screen.survey.SurveyScreen
@@ -95,7 +96,14 @@ fun AppNavGraph(navController: NavHostController) {
 
         composable(NavRoute.EnvironmentSession.route) {
             EnvironmentSessionScreen(
-                onSessionComplete = { navController.navigate(NavRoute.FocusSession.route) },
+                onSessionComplete = { navController.navigate(NavRoute.PlaceSelection.route) },
+                onBack = { navController.popBackStack() },
+            )
+        }
+
+        composable(NavRoute.PlaceSelection.route) {
+            PlaceSelectionScreen(
+                onPlaceSelected = { navController.navigate(NavRoute.FocusSession.route) },
                 onBack = { navController.popBackStack() },
             )
         }

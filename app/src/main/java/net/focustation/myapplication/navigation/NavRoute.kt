@@ -20,6 +20,8 @@ sealed class NavRoute(
     // Session
     data object EnvironmentSession : NavRoute("environment_session")
 
+    data object PlaceSelection : NavRoute("place_selection")
+
     data object FocusSession : NavRoute("focus_session")
 
     data object FeedbackSession : NavRoute("feedback_session")

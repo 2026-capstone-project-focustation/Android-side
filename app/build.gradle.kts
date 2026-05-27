@@ -28,6 +28,48 @@ android {
         naverMapMcpId
             .replace("\\", "\\\\")
             .replace("\"", "\\\"")
+    val mlServerBaseUrl =
+        (
+            (project.findProperty("ML_SERVER_BASE_URL") as String?)
+                ?: localProperties.getProperty("ML_SERVER_BASE_URL", "http://3.34.100.247")
+        ).trim().trimEnd('/')
+    val escapedMlServerBaseUrl =
+        mlServerBaseUrl
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+    val mlApiKey =
+        (
+            (project.findProperty("ML_API_KEY") as String?)
+                ?: localProperties.getProperty("ML_API_KEY", "")
+        ).trim()
+    val escapedMlApiKey =
+        mlApiKey
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+    val naverSearchClientId =
+        (
+            (project.findProperty("NAVER_SEARCH_CLIENT_ID") as String?)
+                ?: localProperties
+                    .getProperty("NAVER_SEARCH_CLIENT_ID", "")
+                    .ifBlank { localProperties.getProperty("NAVER_SEARCH_CLIENTID", "") }
+                    .ifBlank { localProperties.getProperty("NAVER_CLIENT_ID", "") }
+        ).trim()
+    val escapedNaverSearchClientId =
+        naverSearchClientId
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+    val naverSearchClientSecret =
+        (
+            (project.findProperty("NAVER_SEARCH_CLIENT_SECRET") as String?)
+                ?: localProperties
+                    .getProperty("NAVER_SEARCH_CLIENT_SECRET", "")
+                    .ifBlank { localProperties.getProperty("NAVER_SEARCH_CLIENTSECRET", "") }
+                    .ifBlank { localProperties.getProperty("NAVER_CLIENT_SECRET", "") }
+        ).trim()
+    val escapedNaverSearchClientSecret =
+        naverSearchClientSecret
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
 
     namespace = "net.focustation.myapplication"
     compileSdk = 36
@@ -40,6 +82,10 @@ android {
         versionName = "1.0"
         manifestPlaceholders["NAVER_MAP_MCP_ID"] = naverMapMcpId
         buildConfigField("String", "NAVER_MAP_MCP_ID", "\"$escapedNaverMapMcpId\"")
+        buildConfigField("String", "ML_SERVER_BASE_URL", "\"$escapedMlServerBaseUrl\"")
+        buildConfigField("String", "ML_API_KEY", "\"$escapedMlApiKey\"")
+        buildConfigField("String", "NAVER_SEARCH_CLIENT_ID", "\"$escapedNaverSearchClientId\"")
+        buildConfigField("String", "NAVER_SEARCH_CLIENT_SECRET", "\"$escapedNaverSearchClientSecret\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

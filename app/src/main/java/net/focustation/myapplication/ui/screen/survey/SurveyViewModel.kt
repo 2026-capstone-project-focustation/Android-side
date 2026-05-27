@@ -8,8 +8,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import net.focustation.myapplication.data.repository.FirestoreSurveyRepository
+import net.focustation.myapplication.data.repository.MlScoreRepository
 import net.focustation.myapplication.survey.SurveyResponse
 import net.focustation.myapplication.survey.SurveyResponseStore
+import net.focustation.myapplication.util.DebugLog
 import kotlin.math.round
 
 data class SurveyOption(
@@ -48,6 +50,8 @@ data class SurveyUiState(
     val placeRatings: Map<String, Int> = defaultPlaceRatingScores,
     val labels: Map<String, Int> = defaultLabelScores,
     val satisfactionScore: Int = 50,
+    val mlScore: Double? = null,
+    val scoreWarningMessage: String? = null,
     val isSaving: Boolean = false,
     val isSubmitted: Boolean = false,
     val errorMessage: String? = null,
@@ -55,6 +59,7 @@ data class SurveyUiState(
 
 class SurveyViewModel(
     private val repository: FirestoreSurveyRepository = FirestoreSurveyRepository(),
+    private val mlScoreRepository: MlScoreRepository = MlScoreRepository(),
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(SurveyUiState())
     val uiState: StateFlow<SurveyUiState> = _uiState.asStateFlow()
@@ -175,15 +180,28 @@ class SurveyViewModel(
             markSavingOrNull()
                 ?: return
 
-        val response = state.toSurveyResponse()
-        SurveyResponseStore.save(response)
-
         viewModelScope.launch {
-            val result = repository.saveSurveyResponse(response)
+            val baseResponse = state.toSurveyResponse()
+            val scoreResult = mlScoreRepository.calculateScore(baseResponse.modelInput)
+            val scoredResponse =
+                baseResponse.copy(
+                    mlScore = scoreResult.getOrNull()?.score,
+                )
+            val scoreWarningMessage =
+                scoreResult.exceptionOrNull()?.let { error ->
+                    DebugLog.w("[Survey][ML점수] 계산 실패: ${error.message}")
+                    "ML 점수는 계산하지 못했지만 설문은 저장했어요. ${error.message.orEmpty()}"
+                }
+
+            SurveyResponseStore.save(scoredResponse)
+
+            val result = repository.saveSurveyResponse(scoredResponse)
             result.fold(
                 onSuccess = {
                     _uiState.update {
                         it.copy(
+                            mlScore = scoredResponse.mlScore,
+                            scoreWarningMessage = scoreWarningMessage,
                             isSaving = false,
                             isSubmitted = true,
                             errorMessage = null,
@@ -193,6 +211,8 @@ class SurveyViewModel(
                 onFailure = { error ->
                     _uiState.update {
                         it.copy(
+                            mlScore = scoredResponse.mlScore,
+                            scoreWarningMessage = scoreWarningMessage,
                             isSaving = false,
                             errorMessage = error.message ?: "설문 저장에 실패했어요.",
                         )
@@ -207,7 +227,13 @@ class SurveyViewModel(
             val state = _uiState.value
             if (state.isSaving) return null
 
-            val savingState = state.copy(isSaving = true, errorMessage = null)
+            val savingState =
+                state.copy(
+                    mlScore = null,
+                    scoreWarningMessage = null,
+                    isSaving = true,
+                    errorMessage = null,
+                )
             if (_uiState.compareAndSet(state, savingState)) return state
         }
     }

@@ -20,6 +20,7 @@ data class StudySessionSaveRequest(
     val avgIlluminance: Float,
     val avgVibration: Double,
     val focusTimeline: List<FocusDataPoint>,
+    val mlScore: Double? = null,
     val placeName: String,
     val latitude: Double? = null,
     val longitude: Double? = null,
@@ -42,6 +43,7 @@ data class StudySessionRecord(
     val placeName: String,
     val latitude: Double? = null,
     val longitude: Double? = null,
+    val mlScore: Double? = null,
     val focusTimeline: List<FocusDataPoint> = emptyList(),
 )
 
@@ -76,6 +78,7 @@ class FirestoreStudyRepository(
                     "avgIlluminance" to request.avgIlluminance,
                     "avgVibration" to request.avgVibration,
                     "focusScoreAvg" to request.avgEnvironmentScore,
+                    "mlScore" to request.mlScore,
                     "focusTimeline" to
                         request.focusTimeline.map {
                             mapOf(
@@ -188,6 +191,7 @@ class FirestoreStudyRepository(
                             placeName = placeSnapshot?.get("name") as? String ?: "장소 미지정",
                             latitude = (placeSnapshot?.get("latitude") as? Number)?.toDouble(),
                             longitude = (placeSnapshot?.get("longitude") as? Number)?.toDouble(),
+                            mlScore = doc.getDouble("mlScore"),
                             focusTimeline = parseFocusTimeline(doc.get("focusTimeline")),
                         )
                     }
@@ -227,6 +231,7 @@ class FirestoreStudyRepository(
                     placeName = placeSnapshot?.get("name") as? String ?: "장소 미지정",
                     latitude = (placeSnapshot?.get("latitude") as? Number)?.toDouble(),
                     longitude = (placeSnapshot?.get("longitude") as? Number)?.toDouble(),
+                    mlScore = document.getDouble("mlScore"),
                     focusTimeline = parseFocusTimeline(document.get("focusTimeline")),
                 )
             DebugLog.d(

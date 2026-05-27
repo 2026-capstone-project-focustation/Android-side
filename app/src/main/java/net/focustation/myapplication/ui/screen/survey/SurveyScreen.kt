@@ -122,6 +122,7 @@ fun SurveyScreen(
 
     LaunchedEffect(uiState.isSubmitted) {
         if (uiState.isSubmitted) {
+            SurveyPreferences.setLatestMlScore(context, uiState.mlScore)
             SurveyPreferences.setCompleted(context, true)
             onComplete()
         }
@@ -151,7 +152,11 @@ fun SurveyScreen(
                 totalPages = pages.size,
             )
 
-            SurveyErrorMessage(errorMessage = uiState.errorMessage)
+            SurveyMessage(
+                errorMessage = uiState.errorMessage,
+                scoreWarningMessage = uiState.scoreWarningMessage,
+                mlScore = uiState.mlScore,
+            )
 
             HorizontalPager(
                 state = pagerState,
@@ -264,19 +269,40 @@ private fun SurveyHeader(
 }
 
 @Composable
-private fun SurveyErrorMessage(errorMessage: String?) {
-    if (errorMessage.isNullOrBlank()) return
+private fun SurveyMessage(
+    errorMessage: String?,
+    scoreWarningMessage: String?,
+    mlScore: Double?,
+) {
+    val message =
+        when {
+            !errorMessage.isNullOrBlank() -> errorMessage
+            !scoreWarningMessage.isNullOrBlank() -> scoreWarningMessage
+            mlScore != null -> "ML 적합도 점수: ${mlScore.toInt()}점"
+            else -> return
+        }
+    val isError = !errorMessage.isNullOrBlank()
 
     Surface(
         modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
         shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.errorContainer,
+        color =
+            if (isError) {
+                MaterialTheme.colorScheme.errorContainer
+            } else {
+                ReferenceDesignTokens.PaleBlueTrack
+            },
     ) {
         Text(
-            text = errorMessage,
+            text = message,
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onErrorContainer,
+            color =
+                if (isError) {
+                    MaterialTheme.colorScheme.onErrorContainer
+                } else {
+                    ReferenceDesignTokens.TextPrimary
+                },
         )
     }
 }
@@ -941,7 +967,7 @@ private fun SurveyBottomBar(
                 Text(
                     text =
                         when {
-                            isSaving -> "저장 중"
+                            isSaving -> "분석 중"
                             isLastPage -> "완료"
                             else -> "다음"
                         },

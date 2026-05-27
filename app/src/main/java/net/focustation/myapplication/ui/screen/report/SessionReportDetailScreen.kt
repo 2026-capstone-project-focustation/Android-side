@@ -209,7 +209,7 @@ private fun SessionDetailHero(session: StudySessionRecord) {
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        text = session.focusScoreAvg.toInt().toString(),
+                        text = session.displayScore().toString(),
                         color = ReferenceDesignTokens.TextPrimary,
                         style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
                     )
@@ -217,7 +217,11 @@ private fun SessionDetailHero(session: StudySessionRecord) {
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 HeroMetric("집중 시간", "${(session.durationSec / 60).coerceAtLeast(1)}분", Modifier.weight(1f))
-                HeroMetric("환경 점수", "${session.focusScoreAvg.toInt()}점", Modifier.weight(1f))
+                HeroMetric(
+                    if (session.mlScore == null) "환경 점수" else "ML 적합도",
+                    "${session.displayScore()}점",
+                    Modifier.weight(1f),
+                )
             }
         }
     }
@@ -330,9 +334,14 @@ private fun EnvironmentAnalysisGrid(session: StudySessionRecord) {
             )
             AnalysisMetricCard(
                 icon = Icons.Outlined.Schedule,
-                label = "세션 길이",
-                value = "${(session.durationSec / 60).coerceAtLeast(1)}분",
-                status = "기록됨",
+                label = if (session.mlScore == null) "세션 길이" else "ML 적합도",
+                value =
+                    if (session.mlScore == null) {
+                        "${(session.durationSec / 60).coerceAtLeast(1)}분"
+                    } else {
+                        "${session.mlScore.toInt()}점"
+                    },
+                status = if (session.mlScore == null) "기록됨" else "설문 기반",
                 tint = ReferenceDesignTokens.Blue,
                 modifier = Modifier.weight(1f),
             )
@@ -451,6 +460,8 @@ private fun vibrationStatus(vibration: Double): String =
         vibration <= 0.06 -> "보통"
         else -> "흔들림"
     }
+
+private fun StudySessionRecord.displayScore(): Int = (mlScore?.toInt() ?: focusScoreAvg.toInt()).coerceIn(0, 100)
 
 private fun formatDate(epochMillis: Long): String {
     if (epochMillis <= 0L) return "날짜 미상"

@@ -18,8 +18,11 @@ import net.focustation.myapplication.score.ScoreCalculator
 import net.focustation.myapplication.sensor.LightSensorManager
 import net.focustation.myapplication.sensor.NoiseSensorManager
 import net.focustation.myapplication.sensor.VibrationSensorManager
+import net.focustation.myapplication.session.SessionPlaceSelectionStore
 import net.focustation.myapplication.session.SessionReportDraft
 import net.focustation.myapplication.session.SessionReportDraftStore
+import net.focustation.myapplication.survey.SurveyPreferences
+import net.focustation.myapplication.survey.SurveyResponseStore
 import net.focustation.myapplication.util.DebugLog
 import kotlin.math.roundToInt
 
@@ -28,6 +31,7 @@ import kotlin.math.roundToInt
 data class EnvironmentSessionUiState(
     val isRunning: Boolean = false,
     val isPaused: Boolean = false,
+    val isCompleted: Boolean = false,
     val elapsedSeconds: Int = 0,
     val totalSessionSeconds: Int = 300, // 5분
     val noiseHistory: List<Float> = emptyList(),
@@ -143,8 +147,20 @@ class EnvironmentSessionViewModel(
             lightBuf.clear()
             noiseBuf.clear()
             vibBuf.clear()
+            _uiState.update {
+                it.copy(
+                    isRunning = true,
+                    isPaused = false,
+                    isCompleted = false,
+                    elapsedSeconds = 0,
+                    noiseHistory = emptyList(),
+                    currentSnapshot = EnvironmentSnapshot(),
+                    environmentScore = 0f,
+                )
+            }
+        } else {
+            _uiState.update { it.copy(isRunning = true, isPaused = false, isCompleted = false) }
         }
-        _uiState.update { it.copy(isRunning = true, isPaused = false) }
         timerJob?.cancel()
         timerJob =
             viewModelScope.launch {
@@ -154,6 +170,18 @@ class EnvironmentSessionViewModel(
                     _uiState.update { it.copy(elapsedSeconds = it.elapsedSeconds + 1) }
                 }
             }
+    }
+
+    fun completeSession() {
+        timerJob?.cancel()
+        _uiState.update {
+            it.copy(
+                isRunning = false,
+                isPaused = false,
+                isCompleted = true,
+                elapsedSeconds = it.elapsedSeconds.coerceAtMost(it.totalSessionSeconds),
+            )
+        }
     }
 
     /**
@@ -376,6 +404,10 @@ class FocusSessionViewModel(
         val avgNoise = if (noiseCount > 0) (noiseSum / noiseCount).toFloat() else 0f
         val avgIlluminance = if (lightCount > 0) (lightSum / lightCount).toFloat() else 0f
         val avgVibration = if (vibrationCount > 0) vibrationSum / vibrationCount else 0.0
+        val selectedPlace = SessionPlaceSelectionStore.consume()
+        val latestMlScore =
+            SurveyResponseStore.latest()?.mlScore
+                ?: SurveyPreferences.latestMlScore(getApplication())
 
         DebugLog.d(
             "[집중세션][종료] 경과=${state.elapsedSeconds}초, 히스토리=${state.fitHistory.size}개, 타임라인=${timeline.size}개",
@@ -398,6 +430,10 @@ class FocusSessionViewModel(
                 avgIlluminance = avgIlluminance,
                 avgVibration = avgVibration,
                 focusTimeline = timeline,
+                mlScore = latestMlScore,
+                placeName = selectedPlace?.name.orEmpty(),
+                placeLatitude = selectedPlace?.latitude,
+                placeLongitude = selectedPlace?.longitude,
             ),
         )
         DebugLog.d("[집중세션][종료] draft 저장 완료")
@@ -538,6 +574,7 @@ class FeedbackSessionViewModel : androidx.lifecycle.ViewModel() {
                         avgIlluminance = draft.avgIlluminance,
                         avgVibration = draft.avgVibration,
                         focusTimeline = draft.focusTimeline,
+                        mlScore = draft.mlScore,
                         placeName = draft.placeName,
                         latitude = draft.placeLatitude,
                         longitude = draft.placeLongitude,

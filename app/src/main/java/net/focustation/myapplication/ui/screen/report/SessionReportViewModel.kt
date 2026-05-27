@@ -21,6 +21,7 @@ data class StudyHistoryUiItem(
     val avgNoise: Float,
     val avgIlluminance: Float,
     val avgVibration: Double,
+    val mlScore: Double? = null,
     val focusTimeline: List<FocusDataPoint> = emptyList(),
 )
 
@@ -147,6 +148,7 @@ class SessionReportViewModel(
             avgNoise = record.avgNoise,
             avgIlluminance = record.avgIlluminance,
             avgVibration = record.avgVibration,
+            mlScore = record.mlScore,
             focusTimeline = record.focusTimeline,
         )
 }
