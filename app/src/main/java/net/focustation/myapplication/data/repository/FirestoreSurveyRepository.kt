@@ -34,7 +34,6 @@ class FirestoreSurveyRepository(
                     "source" to "android_app",
                     "modelInput" to response.modelInput,
                     "labels" to response.labels,
-                    "mlScore" to response.mlScore,
                     "submittedAt" to FieldValue.serverTimestamp(),
                     "updatedAt" to FieldValue.serverTimestamp(),
                 )
@@ -61,6 +60,6 @@ class FirestoreSurveyRepository(
     private fun uidForLog(uid: String): String = if (uid.length <= 6) uid else "${uid.take(6)}..."
 
     private companion object {
-        private const val SURVEY_SCHEMA_VERSION = 1
+        private const val SURVEY_SCHEMA_VERSION = 2
     }
 }

@@ -28,22 +28,16 @@ android {
         naverMapMcpId
             .replace("\\", "\\\\")
             .replace("\"", "\\\"")
-    val mlServerBaseUrl =
+    val functionsBaseUrl =
         (
-            (project.findProperty("ML_SERVER_BASE_URL") as String?)
-                ?: localProperties.getProperty("ML_SERVER_BASE_URL", "http://3.34.100.247")
+            (project.findProperty("FUNCTIONS_BASE_URL") as String?)
+                ?: localProperties.getProperty(
+                    "FUNCTIONS_BASE_URL",
+                    "https://us-central1-focustation-f7fe9.cloudfunctions.net",
+                )
         ).trim().trimEnd('/')
-    val escapedMlServerBaseUrl =
-        mlServerBaseUrl
-            .replace("\\", "\\\\")
-            .replace("\"", "\\\"")
-    val mlApiKey =
-        (
-            (project.findProperty("ML_API_KEY") as String?)
-                ?: localProperties.getProperty("ML_API_KEY", "")
-        ).trim()
-    val escapedMlApiKey =
-        mlApiKey
+    val escapedFunctionsBaseUrl =
+        functionsBaseUrl
             .replace("\\", "\\\\")
             .replace("\"", "\\\"")
     val naverSearchClientId =
@@ -82,8 +76,7 @@ android {
         versionName = "1.0"
         manifestPlaceholders["NAVER_MAP_MCP_ID"] = naverMapMcpId
         buildConfigField("String", "NAVER_MAP_MCP_ID", "\"$escapedNaverMapMcpId\"")
-        buildConfigField("String", "ML_SERVER_BASE_URL", "\"$escapedMlServerBaseUrl\"")
-        buildConfigField("String", "ML_API_KEY", "\"$escapedMlApiKey\"")
+        buildConfigField("String", "FUNCTIONS_BASE_URL", "\"$escapedFunctionsBaseUrl\"")
         buildConfigField("String", "NAVER_SEARCH_CLIENT_ID", "\"$escapedNaverSearchClientId\"")
         buildConfigField("String", "NAVER_SEARCH_CLIENT_SECRET", "\"$escapedNaverSearchClientSecret\"")
 
