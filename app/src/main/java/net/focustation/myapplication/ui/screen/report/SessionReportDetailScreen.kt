@@ -218,7 +218,7 @@ private fun SessionDetailHero(session: StudySessionRecord) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 HeroMetric("집중 시간", "${(session.durationSec / 60).coerceAtLeast(1)}분", Modifier.weight(1f))
                 HeroMetric(
-                    if (session.mlScore == null) "환경 점수" else "ML 적합도",
+                    if (session.validMlScore == null) "환경 점수" else "ML 적합도",
                     "${session.displayScore()}점",
                     Modifier.weight(1f),
                 )
@@ -334,14 +334,11 @@ private fun EnvironmentAnalysisGrid(session: StudySessionRecord) {
             )
             AnalysisMetricCard(
                 icon = Icons.Outlined.Schedule,
-                label = if (session.mlScore == null) "세션 길이" else "ML 적합도",
+                label = if (session.validMlScore == null) "세션 길이" else "ML 적합도",
                 value =
-                    if (session.mlScore == null) {
-                        "${(session.durationSec / 60).coerceAtLeast(1)}분"
-                    } else {
-                        "${session.mlScore.toInt()}점"
-                    },
-                status = if (session.mlScore == null) "기록됨" else "설문 기반",
+                    session.validMlScore?.let { "${it.toInt()}점" }
+                        ?: "${(session.durationSec / 60).coerceAtLeast(1)}분",
+                status = if (session.validMlScore == null) "기록됨" else "ML 추론",
                 tint = ReferenceDesignTokens.Blue,
                 modifier = Modifier.weight(1f),
             )
@@ -461,7 +458,11 @@ private fun vibrationStatus(vibration: Double): String =
         else -> "흔들림"
     }
 
-private fun StudySessionRecord.displayScore(): Int = (mlScore?.toInt() ?: focusScoreAvg.toInt()).coerceIn(0, 100)
+// mlScore는 ML 새 계약 전까지 더미값 -1로 저장된다. 0 미만이면 아직 점수가 없는 것으로 본다.
+private val StudySessionRecord.validMlScore: Double?
+    get() = mlScore?.takeIf { it >= 0.0 }
+
+private fun StudySessionRecord.displayScore(): Int = (validMlScore?.toInt() ?: focusScoreAvg.toInt()).coerceIn(0, 100)
 
 private fun formatDate(epochMillis: Long): String {
     if (epochMillis <= 0L) return "날짜 미상"

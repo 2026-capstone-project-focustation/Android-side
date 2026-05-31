@@ -12,8 +12,11 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import net.focustation.myapplication.data.model.EnvironmentSnapshot
 import net.focustation.myapplication.data.model.FocusDataPoint
+import net.focustation.myapplication.data.repository.CreateSessionRequest
 import net.focustation.myapplication.data.repository.FirestoreStudyRepository
-import net.focustation.myapplication.data.repository.StudySessionSaveRequest
+import net.focustation.myapplication.data.repository.PlaceSnapshotPayload
+import net.focustation.myapplication.data.repository.SavedPlaceRequest
+import net.focustation.myapplication.data.repository.SessionApiRepository
 import net.focustation.myapplication.score.ScoreCalculator
 import net.focustation.myapplication.sensor.LightSensorManager
 import net.focustation.myapplication.sensor.NoiseSensorManager
@@ -21,9 +24,9 @@ import net.focustation.myapplication.sensor.VibrationSensorManager
 import net.focustation.myapplication.session.SessionPlaceSelectionStore
 import net.focustation.myapplication.session.SessionReportDraft
 import net.focustation.myapplication.session.SessionReportDraftStore
-import net.focustation.myapplication.survey.SurveyPreferences
-import net.focustation.myapplication.survey.SurveyResponseStore
+import net.focustation.myapplication.ui.screen.survey.placeRatingQuestions
 import net.focustation.myapplication.util.DebugLog
+import java.time.LocalDateTime
 import kotlin.math.roundToInt
 
 // ─── 환경 분석 세션 ───────────────────────────────────────────────────────────
@@ -405,9 +408,6 @@ class FocusSessionViewModel(
         val avgIlluminance = if (lightCount > 0) (lightSum / lightCount).toFloat() else 0f
         val avgVibration = if (vibrationCount > 0) vibrationSum / vibrationCount else 0.0
         val selectedPlace = SessionPlaceSelectionStore.consume()
-        val latestMlScore =
-            SurveyResponseStore.latest()?.mlScore
-                ?: SurveyPreferences.latestMlScore(getApplication())
 
         DebugLog.d(
             "[집중세션][종료] 경과=${state.elapsedSeconds}초, 히스토리=${state.fitHistory.size}개, 타임라인=${timeline.size}개",
@@ -430,10 +430,11 @@ class FocusSessionViewModel(
                 avgIlluminance = avgIlluminance,
                 avgVibration = avgVibration,
                 focusTimeline = timeline,
-                mlScore = latestMlScore,
                 placeName = selectedPlace?.name.orEmpty(),
                 placeLatitude = selectedPlace?.latitude,
                 placeLongitude = selectedPlace?.longitude,
+                placeAddress = selectedPlace?.address.orEmpty(),
+                placeCategory = selectedPlace?.category.orEmpty(),
             ),
         )
         DebugLog.d("[집중세션][종료] draft 저장 완료")
@@ -500,55 +501,77 @@ class FocusSessionViewModel(
 
 // ─── 피드백 세션 ──────────────────────────────────────────────────────────────
 
+// placeFeedback = context 10 + place 10 = 20개. 라벨은 현재 POST /sessions 계약에 없으므로 수집하지 않는다.
 data class FeedbackUiState(
-    val subjectiveScore: Int = 3,
-    val question1: Int = 3, // 1=매우 불만족 ~ 5=매우 만족
-    val question2: Int = 3,
-    val question3: Int = 3,
+    // context (사용자 입력 또는 네이버 메타 seed)
+    val placeType: String = "cafe",
+    val taskType: String = "deep_study",
+    val groupSize: String = "solo",
+    val weather: String = "clear",
+    val distanceMinutes: Float = 10f,
+    val visitFrequency: String = "first_time",
+    val indoorOutdoor: String = "indoor",
+    // place 평가 10개 (Likert 1~5)
+    val placeRatings: Map<String, Int> = defaultPlaceFeedbackRatings,
     val isSaving: Boolean = false,
     val saveErrorMessage: String? = null,
     val submitted: Boolean = false,
 )
 
-class FeedbackSessionViewModel : androidx.lifecycle.ViewModel() {
-    private val repository = FirestoreStudyRepository()
-    private val _uiState = MutableStateFlow(FeedbackUiState())
+private val defaultPlaceFeedbackRatings: Map<String, Int> = placeRatingQuestions.associate { it.key to 3 }
+
+class FeedbackSessionViewModel(
+    private val sessionApi: SessionApiRepository = SessionApiRepository(),
+    private val studyRepository: FirestoreStudyRepository = FirestoreStudyRepository(),
+) : androidx.lifecycle.ViewModel() {
+    private val _uiState = MutableStateFlow(seedInitialState())
     val uiState: StateFlow<FeedbackUiState> = _uiState.asStateFlow()
 
-    /**
-     * Sets the user's overall subjective score in the feedback UI state.
-     *
-     * @param score The subjective score value where 1 = very dissatisfied and 5 = very satisfied.
-     */
-    fun updateSubjectiveScore(score: Int) {
-        _uiState.update { it.copy(subjectiveScore = score) }
+    // 장소 선택 시 잡힌 네이버 카테고리로 place_type을 미리 채운다(사용자가 수정 가능).
+    private fun seedInitialState(): FeedbackUiState {
+        val category = SessionReportDraftStore.peek()?.placeCategory.orEmpty()
+        val placeType = mapNaverCategoryToPlaceType(category)
+        return FeedbackUiState(
+            placeType = placeType,
+            indoorOutdoor = indoorOutdoorForPlaceType(placeType),
+        )
     }
 
-    /**
-     * Updates the response to feedback question 1 in the UI state.
-     *
-     * @param score Selected response for question 1 where 1 = very dissatisfied and 5 = very satisfied (valid range 1–5).
-     */
-    fun updateQuestion1(score: Int) {
-        _uiState.update { it.copy(question1 = score) }
+    fun setPlaceType(value: String) {
+        _uiState.update { it.copy(placeType = value, indoorOutdoor = indoorOutdoorForPlaceType(value)) }
     }
 
-    /**
-     * Set the second questionnaire response in the feedback UI state.
-     *
-     * @param score The response for question 2 on a 1–5 scale (1 = very dissatisfied, 5 = very satisfied).
-     */
-    fun updateQuestion2(score: Int) {
-        _uiState.update { it.copy(question2 = score) }
+    fun setTaskType(value: String) {
+        _uiState.update { it.copy(taskType = value) }
     }
 
-    /**
-     * Updates the stored response for question 3 in the feedback UI state.
-     *
-     * @param score Rating value from 1 (very dissatisfied) to 5 (very satisfied).
-     */
-    fun updateQuestion3(score: Int) {
-        _uiState.update { it.copy(question3 = score) }
+    fun setGroupSize(value: String) {
+        _uiState.update { it.copy(groupSize = value) }
+    }
+
+    fun setWeather(value: String) {
+        _uiState.update { it.copy(weather = value) }
+    }
+
+    fun setDistanceMinutes(value: Float) {
+        _uiState.update { it.copy(distanceMinutes = value.coerceIn(1f, 60f)) }
+    }
+
+    fun setVisitFrequency(value: String) {
+        _uiState.update { it.copy(visitFrequency = value) }
+    }
+
+    fun setIndoorOutdoor(value: String) {
+        _uiState.update { it.copy(indoorOutdoor = value) }
+    }
+
+    fun setPlaceRating(
+        key: String,
+        value: Int,
+    ) {
+        _uiState.update { state ->
+            state.copy(placeRatings = state.placeRatings + (key to value.coerceIn(1, 5)))
+        }
     }
 
     fun submit() {
@@ -556,7 +579,7 @@ class FeedbackSessionViewModel : androidx.lifecycle.ViewModel() {
 
         val draft = SessionReportDraftStore.peek()
         if (draft == null) {
-            DebugLog.w("[Feedback][Save] No session draft.")
+            DebugLog.w("[Feedback][Save] 세션 draft 없음")
             _uiState.update {
                 it.copy(saveErrorMessage = "세션 데이터를 찾지 못했어요. 저장하지 않고 나갈 수 있어요.")
             }
@@ -565,43 +588,80 @@ class FeedbackSessionViewModel : androidx.lifecycle.ViewModel() {
 
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true, saveErrorMessage = null) }
-            val result =
-                repository.saveStudySession(
-                    StudySessionSaveRequest(
-                        totalFocusMinutes = draft.totalFocusMinutes,
-                        avgEnvironmentScore = draft.avgEnvironmentScore,
-                        avgNoise = draft.avgNoise,
-                        avgIlluminance = draft.avgIlluminance,
-                        avgVibration = draft.avgVibration,
-                        focusTimeline = draft.focusTimeline,
-                        mlScore = draft.mlScore,
-                        placeName = draft.placeName,
-                        latitude = draft.placeLatitude,
-                        longitude = draft.placeLongitude,
-                    ),
-                )
-
-            result.fold(
-                onSuccess = {
-                    SessionReportDraftStore.clearIfCurrent(draft)
-                    _uiState.update {
-                        it.copy(
-                            isSaving = false,
-                            saveErrorMessage = null,
-                            submitted = true,
-                        )
-                    }
-                },
-                onFailure = { error ->
-                    DebugLog.e("[Feedback][Save] Failed to save session: ${error.message}", error)
-                    _uiState.update {
-                        it.copy(
-                            isSaving = false,
-                            saveErrorMessage = error.message ?: "세션 기록 저장에 실패했어요.",
-                        )
-                    }
-                },
-            )
+            val request = buildRequest(draft, _uiState.value)
+            val result = sessionApi.createSession(request)
+            val created = result.getOrNull()
+            if (created != null) {
+                DebugLog.d("[Feedback][Save] 성공 sessionId=${created.sessionId}, mlScore=${created.mlScore}")
+                // 사용한 장소를 savedPlaces에 남겨 다음 세션의 '최근 공간'으로 노출한다.
+                persistPlaceIfNeeded(draft)
+                SessionReportDraftStore.clearIfCurrent(draft)
+                _uiState.update {
+                    it.copy(isSaving = false, saveErrorMessage = null, submitted = true)
+                }
+            } else {
+                val error = result.exceptionOrNull()
+                DebugLog.e("[Feedback][Save] POST /sessions 실패: ${error?.message}", error)
+                _uiState.update {
+                    it.copy(
+                        isSaving = false,
+                        saveErrorMessage = error?.message ?: "세션 기록 저장에 실패했어요.",
+                    )
+                }
+            }
         }
+    }
+
+    private suspend fun persistPlaceIfNeeded(draft: SessionReportDraft) {
+        val name = draft.placeName.trim()
+        val lat = draft.placeLatitude
+        val lng = draft.placeLongitude
+        if (name.isBlank() || name == "장소 미지정" || lat == null || lng == null) return
+        studyRepository
+            .savePlace(SavedPlaceRequest(name = name, latitude = lat, longitude = lng))
+            .onFailure { error ->
+                DebugLog.e("[Feedback][장소저장] 실패: ${error.message}", error)
+            }
+    }
+
+    private fun buildRequest(
+        draft: SessionReportDraft,
+        state: FeedbackUiState,
+    ): CreateSessionRequest {
+        val now = LocalDateTime.now()
+        val placeFeedback =
+            linkedMapOf<String, Any>(
+                "place_type" to state.placeType,
+                "task_type" to state.taskType,
+                "group_size" to state.groupSize,
+                "stay_duration" to stayDurationForMinutes(draft.totalFocusMinutes),
+                "time_slot" to timeSlotForHour(now.hour),
+                "day_type" to dayTypeForDayOfWeek(now.dayOfWeek),
+                "distance_minutes" to state.distanceMinutes.toDouble(),
+                "weather" to state.weather,
+                "indoor_outdoor" to state.indoorOutdoor,
+                "visit_frequency" to state.visitFrequency,
+            )
+        placeRatingQuestions.forEach { question ->
+            placeFeedback[question.key] = state.placeRatings[question.key] ?: 3
+        }
+
+        return CreateSessionRequest(
+            durationSec = draft.totalFocusMinutes * 60,
+            avgEnvironmentScore = draft.avgEnvironmentScore.toDouble(),
+            avgNoise = draft.avgNoise.toDouble(),
+            avgIlluminance = draft.avgIlluminance.toDouble(),
+            avgVibration = draft.avgVibration,
+            focusTimeline = draft.focusTimeline,
+            placeSnapshot =
+                PlaceSnapshotPayload(
+                    name = draft.placeName.ifBlank { "장소 미지정" },
+                    latitude = draft.placeLatitude,
+                    longitude = draft.placeLongitude,
+                    address = draft.placeAddress.ifBlank { null },
+                    category = draft.placeCategory.ifBlank { null },
+                ),
+            placeFeedback = placeFeedback,
+        )
     }
 }

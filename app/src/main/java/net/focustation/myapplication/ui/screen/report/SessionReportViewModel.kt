@@ -72,7 +72,7 @@ class SessionReportViewModel(
                         state.copy(
                             deletingSessionIds = state.deletingSessionIds - sessionId,
                             history = state.history.filterNot { it.sessionId == sessionId },
-                            deleteFeedbackMessage = "기록을 숨김 처리했어요. (Firestore에는 보관돼요)",
+                            deleteFeedbackMessage = "기록을 삭제했어요.",
                         )
                     }
                 },

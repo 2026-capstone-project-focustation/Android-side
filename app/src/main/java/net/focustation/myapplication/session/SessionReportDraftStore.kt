@@ -10,10 +10,11 @@ data class SessionReportDraft(
     val avgIlluminance: Float,
     val avgVibration: Double,
     val focusTimeline: List<FocusDataPoint>,
-    val mlScore: Double? = null,
     val placeName: String = "",
     val placeLatitude: Double? = null,
     val placeLongitude: Double? = null,
+    val placeAddress: String = "",
+    val placeCategory: String = "",
 )
 
 object SessionReportDraftStore {
