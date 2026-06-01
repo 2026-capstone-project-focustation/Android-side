@@ -65,4 +65,61 @@ class SessionFeedbackDerivationsTest {
         assertEquals("late_night", timeSlotForHour(24))
         assertEquals("under_1h", stayDurationForMinutes(-10))
     }
+
+    @Test
+    fun `센서 raw sample을 v2 summary로 변환한다`() {
+        val summary =
+            buildSensorSummaryPayload(
+                noiseSamples = listOf(30.0, 32.0, 60.0, 62.0),
+                lightSamples = listOf(400f, 500f, 600f),
+                vibrationSamples = listOf(0.01, 0.09, 0.04, 0.10, 0.03),
+                measurementDurationSec = 127,
+            )
+
+        assertEquals(46.0, summary.noiseMeanDb, 0.0001)
+        assertEquals(62.0, summary.noiseMaxDb, 0.0001)
+        assertEquals(61.4, summary.noiseP90Db, 0.0001)
+        assertEquals(1, summary.noiseSpikeCount)
+        assertEquals(500.0, summary.lightMeanLux, 0.0001)
+        assertEquals(400.0, summary.lightMinLux, 0.0001)
+        assertEquals(600.0, summary.lightMaxLux, 0.0001)
+        assertEquals(0.098, summary.vibrationP95, 0.0001)
+        assertEquals(2, summary.vibrationSpikeCount)
+        assertEquals(127, summary.measurementDurationSec)
+        assertEquals(1.0, summary.validSampleRatio ?: 0.0, 0.0001)
+        assertEquals(0.4, summary.phoneMovementRatio ?: 0.0, 0.0001)
+    }
+
+    @Test
+    fun `v2 modelInput은 설문 장소 피드백 센서 요약값을 flat payload로 합친다`() {
+        val input =
+            buildSensorTargetV2ModelInput(
+                surveyModelInput =
+                    mapOf(
+                        "user_type" to "balanced",
+                        "pref_quiet" to 4,
+                    ),
+                placeFeedback =
+                    mapOf(
+                        "place_type" to "home",
+                        "place_quiet" to 5,
+                    ),
+                sensorSummary =
+                    buildSensorSummaryPayload(
+                        noiseSamples = listOf(30.0),
+                        lightSamples = listOf(500f),
+                        vibrationSamples = listOf(0.02),
+                        measurementDurationSec = 60,
+                    ),
+            )
+
+        assertEquals("balanced", input["user_type"])
+        assertEquals(4, input["pref_quiet"])
+        assertEquals("home", input["place_type"])
+        assertEquals(5, input["place_quiet"])
+        assertEquals(30.0, input["noise_mean_db"])
+        assertEquals(500.0, input["light_mean_lux"])
+        assertEquals(0.02, input["vibration_mean"])
+        assertEquals(60, input["measurement_duration_sec"])
+    }
 }

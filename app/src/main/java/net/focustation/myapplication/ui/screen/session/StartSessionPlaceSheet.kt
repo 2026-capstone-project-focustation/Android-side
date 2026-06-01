@@ -35,6 +35,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -52,6 +53,7 @@ import net.focustation.myapplication.R
 import net.focustation.myapplication.data.repository.FirestoreStudyRepository
 import net.focustation.myapplication.data.repository.SavedPlaceRecord
 import net.focustation.myapplication.ui.components.ReferenceDesignTokens
+import net.focustation.myapplication.ui.theme.FocustationTheme
 
 data class StartSessionPlaceUiState(
     val isLoading: Boolean = true,
@@ -103,84 +105,100 @@ fun StartSessionPlaceSheet(
         sheetState = sheetState,
         containerColor = ReferenceDesignTokens.WhiteCard,
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight(0.72f)
-                    .padding(horizontal = 20.dp)
-                    .padding(top = 4.dp, bottom = 20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+        StartSessionPlaceSheetContent(
+            uiState = uiState,
+            onSelectRecent = onSelectRecent,
+            onPickManually = onPickManually,
+            onSkip = onSkip,
+            modifier = Modifier.fillMaxHeight(0.72f),
+        )
+    }
+}
+
+@Composable
+private fun StartSessionPlaceSheetContent(
+    uiState: StartSessionPlaceUiState,
+    onSelectRecent: (SavedPlaceRecord) -> Unit,
+    onPickManually: () -> Unit,
+    onSkip: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(top = 4.dp, bottom = 20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        PokeyPlaceHero()
+
+        Text(
+            text = "오늘 집중할 공간은 어디인가요?",
+            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
+            color = ReferenceDesignTokens.TextPrimary,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = "최근 방문한 공간에서 바로 시작하거나,\n오늘의 새로운 집중 장소를 직접 찾아보세요",
+            style = MaterialTheme.typography.bodyMedium,
+            color = ReferenceDesignTokens.TextSecondary,
+            textAlign = TextAlign.Center,
+        )
+
+        Spacer(Modifier.height(18.dp))
+
+        Box(
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            contentAlignment = Alignment.TopCenter,
         ) {
-            PokeyPlaceHero()
+            when {
+                uiState.isLoading ->
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 28.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircularProgressIndicator(strokeWidth = 2.dp)
+                    }
 
+                uiState.loadFailed ->
+                    LoadFailedHint()
+
+                uiState.recentPlaces.isEmpty() ->
+                    EmptyRecentHint()
+
+                else ->
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        uiState.recentPlaces.forEach { place ->
+                            RecentPlaceCard(place = place, onClick = { onSelectRecent(place) })
+                        }
+                    }
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        OutlinedButton(
+            onClick = onPickManually,
+            modifier = Modifier.fillMaxWidth().height(54.dp),
+            shape = CircleShape,
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = ReferenceDesignTokens.TextPrimary),
+        ) {
             Text(
-                text = "오늘 집중할 공간은 어디인가요?",
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
-                color = ReferenceDesignTokens.TextPrimary,
-                textAlign = TextAlign.Center,
+                text = "직접 선택할래요",
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
             )
-            Spacer(Modifier.height(6.dp))
+        }
+        TextButton(
+            onClick = onSkip,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
             Text(
-                text = "최근 방문한 공간에서 바로 시작하거나,\n오늘의 새로운 집중 장소를 직접 찾아보세요",
-                style = MaterialTheme.typography.bodyMedium,
+                text = "위치 없이 시작",
+                style = MaterialTheme.typography.labelMedium,
                 color = ReferenceDesignTokens.TextSecondary,
-                textAlign = TextAlign.Center,
             )
-
-            Spacer(Modifier.height(18.dp))
-
-            Box(
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                contentAlignment = Alignment.TopCenter,
-            ) {
-                when {
-                    uiState.isLoading ->
-                        Box(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 28.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            CircularProgressIndicator(strokeWidth = 2.dp)
-                        }
-
-                    uiState.loadFailed ->
-                        LoadFailedHint()
-
-                    uiState.recentPlaces.isEmpty() ->
-                        EmptyRecentHint()
-
-                    else ->
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            uiState.recentPlaces.forEach { place ->
-                                RecentPlaceCard(place = place, onClick = { onSelectRecent(place) })
-                            }
-                        }
-                }
-            }
-
-            Spacer(Modifier.height(12.dp))
-
-            OutlinedButton(
-                onClick = onPickManually,
-                modifier = Modifier.fillMaxWidth().height(54.dp),
-                shape = CircleShape,
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = ReferenceDesignTokens.TextPrimary),
-            ) {
-                Text(
-                    text = "직접 선택할래요",
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                )
-            }
-            TextButton(
-                onClick = onSkip,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    text = "위치 없이 시작",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = ReferenceDesignTokens.TextSecondary,
-                )
-            }
         }
     }
 }
@@ -277,5 +295,30 @@ private fun LoadFailedHint() {
             color = ReferenceDesignTokens.TextSecondary,
             textAlign = TextAlign.Center,
         )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun StartSessionPlaceSheetPreview() {
+    FocustationTheme {
+        Surface(color = ReferenceDesignTokens.WhiteCard) {
+            StartSessionPlaceSheetContent(
+                uiState =
+                    StartSessionPlaceUiState(
+                        isLoading = false,
+                        recentPlaces =
+                            listOf(
+                                SavedPlaceRecord(id = "library", name = "중앙 도서관"),
+                                SavedPlaceRecord(id = "cafe", name = "캠퍼스 카페"),
+                                SavedPlaceRecord(id = "home", name = "집 책상"),
+                            ),
+                    ),
+                onSelectRecent = {},
+                onPickManually = {},
+                onSkip = {},
+                modifier = Modifier.height(620.dp),
+            )
+        }
     }
 }

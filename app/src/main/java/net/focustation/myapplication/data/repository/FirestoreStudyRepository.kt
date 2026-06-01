@@ -7,6 +7,8 @@ import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
 import net.focustation.myapplication.data.model.FocusDataPoint
+import net.focustation.myapplication.data.model.SensorTimelinePoint
+import net.focustation.myapplication.data.model.SensorTimelines
 import net.focustation.myapplication.util.DebugLog
 import java.util.Locale
 import kotlin.math.abs
@@ -37,6 +39,7 @@ data class StudySessionRecord(
     val longitude: Double? = null,
     val mlScore: Double? = null,
     val focusTimeline: List<FocusDataPoint> = emptyList(),
+    val sensorTimelines: SensorTimelines = SensorTimelines(),
 )
 
 class FirestoreStudyRepository(
@@ -140,6 +143,13 @@ class FirestoreStudyRepository(
                             longitude = (placeSnapshot?.get("longitude") as? Number)?.toDouble(),
                             mlScore = doc.getDouble("mlScore"),
                             focusTimeline = parseFocusTimeline(doc.get("focusTimeline")),
+                            sensorTimelines =
+                                parseSensorTimelines(
+                                    raw = doc.get("sensorTimelines"),
+                                    noiseRaw = doc.get("noiseTimeline"),
+                                    lightRaw = doc.get("lightTimeline"),
+                                    vibrationRaw = doc.get("vibrationTimeline"),
+                                ),
                         )
                     }
             DebugLog.d("[Firestore][목록조회][성공] uid=${uidForLog(uid)}, count=${records.size}")
@@ -180,11 +190,18 @@ class FirestoreStudyRepository(
                     longitude = (placeSnapshot?.get("longitude") as? Number)?.toDouble(),
                     mlScore = document.getDouble("mlScore"),
                     focusTimeline = parseFocusTimeline(document.get("focusTimeline")),
+                    sensorTimelines =
+                        parseSensorTimelines(
+                            raw = document.get("sensorTimelines"),
+                            noiseRaw = document.get("noiseTimeline"),
+                            lightRaw = document.get("lightTimeline"),
+                            vibrationRaw = document.get("vibrationTimeline"),
+                        ),
                 )
             DebugLog.d(
                 "[Firestore][상세조회][성공] uid=${uidForLog(
                     uid,
-                )}, sessionId=${record.sessionId}, 타임라인=${record.focusTimeline.size}개",
+                )}, sessionId=${record.sessionId}, 센서추이=${record.sensorTimelines.totalCount()}개",
             )
             record
         }.onFailure { error ->
@@ -222,6 +239,36 @@ class FirestoreStudyRepository(
             )
         }
     }
+
+    private fun parseSensorTimelines(
+        raw: Any?,
+        noiseRaw: Any? = null,
+        lightRaw: Any? = null,
+        vibrationRaw: Any? = null,
+    ): SensorTimelines {
+        val map = raw as? Map<*, *>
+        return SensorTimelines(
+            noise = parseSensorTimeline(map?.get("noise") ?: map?.get("noiseTimeline") ?: noiseRaw),
+            light = parseSensorTimeline(map?.get("light") ?: map?.get("lightTimeline") ?: lightRaw),
+            vibration = parseSensorTimeline(map?.get("vibration") ?: map?.get("vibrationTimeline") ?: vibrationRaw),
+        )
+    }
+
+    private fun parseSensorTimeline(raw: Any?): List<SensorTimelinePoint> {
+        val points = raw as? List<*> ?: return emptyList()
+        return points.mapNotNull { entry ->
+            val map = entry as? Map<*, *> ?: return@mapNotNull null
+            val timeLabel = (map["timeLabel"] as? String)?.trim().orEmpty()
+            val value = (map["value"] as? Number)?.toFloat() ?: return@mapNotNull null
+            if (timeLabel.isBlank() || !value.isFinite()) return@mapNotNull null
+            SensorTimelinePoint(
+                timeLabel = timeLabel,
+                value = value.coerceAtLeast(0f),
+            )
+        }
+    }
+
+    private fun SensorTimelines.totalCount(): Int = noise.size + light.size + vibration.size
 
     private fun buildStablePlaceId(request: SavedPlaceRequest): String {
         val normalizedName = request.name.trim().lowercase(Locale.ROOT)

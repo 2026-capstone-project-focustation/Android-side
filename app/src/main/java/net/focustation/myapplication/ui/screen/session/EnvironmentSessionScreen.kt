@@ -32,7 +32,6 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.Sensors
-import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -105,14 +104,6 @@ fun EnvironmentSessionScreen(
             }
         }
 
-    val remaining = (uiState.totalSessionSeconds - uiState.elapsedSeconds).coerceAtLeast(0)
-    val progress =
-        if (uiState.totalSessionSeconds <= 0) {
-            0f
-        } else {
-            (uiState.elapsedSeconds.toFloat() / uiState.totalSessionSeconds).coerceIn(0f, 1f)
-        }
-
     val startSession = {
         val hasPermission =
             ContextCompat.checkSelfPermission(
@@ -134,6 +125,43 @@ fun EnvironmentSessionScreen(
         }
     }
 
+    EnvironmentSessionContent(
+        uiState = uiState,
+        onBack = onBack,
+        onStart = startSession,
+        onPause = viewModel::pauseSession,
+        onResume = viewModel::startSession,
+        onFinish = {
+            viewModel.completeSession()
+        },
+        onRetry = {
+            viewModel.stopSession()
+            startSession()
+        },
+        onContinue = onSessionComplete,
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EnvironmentSessionContent(
+    uiState: EnvironmentSessionUiState,
+    onBack: () -> Unit,
+    onStart: () -> Unit,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
+    onFinish: () -> Unit,
+    onRetry: () -> Unit,
+    onContinue: () -> Unit,
+) {
+    val remaining = (uiState.totalSessionSeconds - uiState.elapsedSeconds).coerceAtLeast(0)
+    val progress =
+        if (uiState.totalSessionSeconds <= 0) {
+            0f
+        } else {
+            (uiState.elapsedSeconds.toFloat() / uiState.totalSessionSeconds).coerceIn(0f, 1f)
+        }
+
     Scaffold(
         containerColor = ReferenceDesignTokens.Screen,
     ) { paddingValues ->
@@ -153,7 +181,6 @@ fun EnvironmentSessionScreen(
             EnvironmentTimerCard(
                 remainingSeconds = remaining,
                 progress = progress,
-                score = uiState.environmentScore,
                 isRunning = uiState.isRunning,
                 isPaused = uiState.isPaused,
                 isCompleted = uiState.isCompleted,
@@ -163,34 +190,37 @@ fun EnvironmentSessionScreen(
                 illuminance = uiState.currentSnapshot.illuminance,
                 vibration = uiState.currentSnapshot.vibration,
             )
-            EnvironmentInsightCard(
-                score = uiState.environmentScore,
-                isRunning = uiState.isRunning,
+            EnvironmentSensorGraphCard(
+                title = "소음 추이",
+                history = uiState.noiseHistory,
+                lineColor = ColorNoise,
+                minValue = 20f,
+                maxValue = 90f,
             )
-            if (uiState.isCompleted) {
-                EnvironmentResultCard(
-                    score = uiState.environmentScore,
-                    noise = uiState.currentSnapshot.noiseLevel,
-                    illuminance = uiState.currentSnapshot.illuminance,
-                    vibration = uiState.currentSnapshot.vibration,
-                )
-            }
-            EnvironmentNoiseGraphCard(noiseHistory = uiState.noiseHistory)
+            EnvironmentSensorGraphCard(
+                title = "조도 추이",
+                history = uiState.lightHistory,
+                lineColor = ColorLight,
+                minValue = 0f,
+                maxValue = 1000f,
+            )
+            EnvironmentSensorGraphCard(
+                title = "진동 추이",
+                history = uiState.vibrationHistory,
+                lineColor = ColorVibration,
+                minValue = 0f,
+                maxValue = 0.2f,
+            )
             EnvironmentControlButtons(
                 isRunning = uiState.isRunning,
                 isPaused = uiState.isPaused,
                 isCompleted = uiState.isCompleted,
-                onStart = startSession,
-                onPause = viewModel::pauseSession,
-                onResume = viewModel::startSession,
-                onFinish = {
-                    viewModel.completeSession()
-                },
-                onRetry = {
-                    viewModel.stopSession()
-                    startSession()
-                },
-                onContinue = onSessionComplete,
+                onStart = onStart,
+                onPause = onPause,
+                onResume = onResume,
+                onFinish = onFinish,
+                onRetry = onRetry,
+                onContinue = onContinue,
             )
         }
     }
@@ -224,7 +254,7 @@ private fun EnvironmentTopBar(onBack: () -> Unit) {
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
             )
             Text(
-                text = "지금 공간이 집중에 맞는지 확인해요",
+                text = "소음, 조도, 진동을 기록해요",
                 color = ReferenceDesignTokens.TextSecondary,
                 style = MaterialTheme.typography.labelSmall,
             )
@@ -237,7 +267,6 @@ private fun EnvironmentTopBar(onBack: () -> Unit) {
 private fun EnvironmentTimerCard(
     remainingSeconds: Int,
     progress: Float,
-    score: Float,
     isRunning: Boolean,
     isPaused: Boolean,
     isCompleted: Boolean,
@@ -285,12 +314,11 @@ private fun EnvironmentTimerCard(
                         style = MaterialTheme.typography.displayMedium.copy(fontWeight = FontWeight.Black),
                     )
                     Text(
-                        text = "5분 동안 소음, 조도, 진동을 함께 분석해요",
+                        text = "5분 동안 센서값을 실시간으로 기록해요",
                         color = Color.White.copy(alpha = 0.68f),
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
-                ScoreBadge(score = score)
             }
 
             LinearProgressIndicator(
@@ -332,37 +360,6 @@ private fun StatusPill(
             text = label,
             color = Color.White,
             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-        )
-    }
-}
-
-@Composable
-private fun ScoreBadge(score: Float) {
-    Column(
-        modifier =
-            Modifier
-                .width(84.dp)
-                .clip(RoundedCornerShape(20.dp))
-                .background(Color.White.copy(alpha = 0.10f))
-                .padding(vertical = 12.dp, horizontal = 10.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Icon(
-            imageVector = Icons.Outlined.Sensors,
-            contentDescription = null,
-            tint = ReferenceDesignTokens.Yellow,
-            modifier = Modifier.size(22.dp),
-        )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = "%.0f".format(score),
-            color = Color.White,
-            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black),
-        )
-        Text(
-            text = "환경 점수",
-            color = Color.White.copy(alpha = 0.62f),
-            style = MaterialTheme.typography.labelSmall,
         )
     }
 }
@@ -474,59 +471,13 @@ private fun EnvironmentMetricCard(
 }
 
 @Composable
-private fun EnvironmentInsightCard(
-    score: Float,
-    isRunning: Boolean,
+private fun EnvironmentSensorGraphCard(
+    title: String,
+    history: List<Float>,
+    lineColor: Color,
+    minValue: Float,
+    maxValue: Float,
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = ReferenceDesignTokens.WhiteCard),
-        border = BorderStroke(1.dp, ReferenceDesignTokens.Border),
-        elevation = CardDefaults.cardElevation(0.dp),
-    ) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-            verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Box(
-                modifier =
-                    Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(environmentAccentColor(score).copy(alpha = 0.16f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Timer,
-                    contentDescription = null,
-                    tint = environmentAccentColor(score),
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = environmentSessionTitle(score),
-                    color = ReferenceDesignTokens.TextPrimary,
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = environmentSessionMessage(score, isRunning),
-                    color = ReferenceDesignTokens.TextSecondary,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun EnvironmentNoiseGraphCard(noiseHistory: List<Float>) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
@@ -545,7 +496,7 @@ private fun EnvironmentNoiseGraphCard(noiseHistory: List<Float>) {
             ) {
                 Column {
                     Text(
-                        text = "소음 추이",
+                        text = title,
                         color = ReferenceDesignTokens.TextPrimary,
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
                     )
@@ -556,17 +507,17 @@ private fun EnvironmentNoiseGraphCard(noiseHistory: List<Float>) {
                     )
                 }
                 Text(
-                    text = "${noiseHistory.size}개",
+                    text = "${history.size}개",
                     color = ReferenceDesignTokens.Blue,
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                 )
             }
-            if (noiseHistory.size >= 2) {
+            if (history.size >= 2) {
                 MiniLineGraph(
-                    dataPoints = noiseHistory,
-                    lineColor = ColorNoise,
-                    minValue = 20f,
-                    maxValue = 80f,
+                    dataPoints = history,
+                    lineColor = lineColor,
+                    minValue = minValue,
+                    maxValue = maxValue,
                     modifier =
                         Modifier
                             .fillMaxWidth()
@@ -590,77 +541,6 @@ private fun EnvironmentNoiseGraphCard(noiseHistory: List<Float>) {
                     )
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun EnvironmentResultCard(
-    score: Float,
-    noise: Float,
-    illuminance: Float,
-    vibration: Double,
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = ReferenceDesignTokens.WhiteCard),
-        border = BorderStroke(1.dp, ReferenceDesignTokens.Border),
-        elevation = CardDefaults.cardElevation(0.dp),
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text(
-                text = "환경 측정 결과",
-                color = ReferenceDesignTokens.TextPrimary,
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
-            )
-            Text(
-                text = "현재 공간의 로컬 센서 기반 환경 점수는 ${"%.0f".format(score)}점이에요.",
-                color = ReferenceDesignTokens.TextSecondary,
-                style = MaterialTheme.typography.bodySmall,
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                ResultMetric("소음", "%.0f dB".format(noise), Modifier.weight(1f))
-                ResultMetric("조도", "%.0f lux".format(illuminance), Modifier.weight(1f))
-                ResultMetric("진동", "%.3f".format(vibration), Modifier.weight(1f))
-            }
-        }
-    }
-}
-
-@Composable
-private fun ResultMetric(
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(14.dp),
-        color = ReferenceDesignTokens.PaleBlueTrack,
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            Text(
-                text = value,
-                color = ReferenceDesignTokens.TextPrimary,
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                maxLines = 1,
-            )
-            Text(
-                text = label,
-                color = ReferenceDesignTokens.TextSecondary,
-                style = MaterialTheme.typography.labelSmall,
-            )
         }
     }
 }
@@ -813,33 +693,6 @@ private fun environmentStatusLabel(
         else -> "대기 중"
     }
 
-private fun environmentAccentColor(score: Float): Color =
-    when {
-        score <= 0f -> ReferenceDesignTokens.Blue
-        score >= 75f -> ReferenceDesignTokens.Blue
-        score >= 50f -> ReferenceDesignTokens.YellowDark
-        else -> ColorNoise
-    }
-
-private fun environmentSessionTitle(score: Float): String =
-    when {
-        score <= 0f -> "측정을 시작해볼까요?"
-        score >= 75f -> "집중하기 좋은 공간이에요"
-        score >= 50f -> "조금만 다듬으면 더 좋아져요"
-        else -> "방해 요소가 감지되고 있어요"
-    }
-
-private fun environmentSessionMessage(
-    score: Float,
-    isRunning: Boolean,
-): String =
-    when {
-        score <= 0f && !isRunning -> "5분 동안 주변 환경을 측정해서 집중에 적합한지 분석할게요."
-        score >= 75f -> "현재 환경이 안정적이에요. 이 조건을 기록해두면 나중에 좋은 집중 장소를 찾는 기준이 됩니다."
-        score >= 50f -> "소음, 조도, 진동 중 하나만 조정해도 집중 적합도가 더 좋아질 수 있어요."
-        else -> "가능하다면 더 조용한 자리로 이동하거나 조명 반사를 줄인 뒤 다시 측정해보세요."
-    }
-
 private fun formatRemainingTime(seconds: Int): String {
     val minutes = seconds / 60
     val remainingSeconds = seconds % 60
@@ -850,6 +703,29 @@ private fun formatRemainingTime(seconds: Int): String {
 @Composable
 private fun EnvironmentSessionPreview() {
     FocustationTheme {
-        EnvironmentSessionScreen(onSessionComplete = {}, onBack = {})
+        EnvironmentSessionContent(
+            uiState =
+                EnvironmentSessionUiState(
+                    isRunning = true,
+                    elapsedSeconds = 138,
+                    totalSessionSeconds = 300,
+                    noiseHistory = listOf(34f, 36f, 33f, 38f, 35f, 37f, 34f),
+                    lightHistory = listOf(460f, 500f, 520f, 540f, 510f, 535f, 520f),
+                    vibrationHistory = listOf(0.020f, 0.032f, 0.024f, 0.038f, 0.030f, 0.026f, 0.032f),
+                    currentSnapshot =
+                        net.focustation.myapplication.data.model.EnvironmentSnapshot(
+                            noiseLevel = 35f,
+                            illuminance = 520f,
+                            vibration = 0.032,
+                        ),
+                ),
+            onBack = {},
+            onStart = {},
+            onPause = {},
+            onResume = {},
+            onFinish = {},
+            onRetry = {},
+            onContinue = {},
+        )
     }
 }

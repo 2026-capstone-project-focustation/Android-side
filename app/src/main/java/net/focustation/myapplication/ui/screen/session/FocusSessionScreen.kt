@@ -5,9 +5,12 @@ import android.content.pm.PackageManager
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Pause
@@ -19,22 +22,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import net.focustation.myapplication.ui.components.FocusCard
-import net.focustation.myapplication.ui.components.FocusInsightCard
-import net.focustation.myapplication.ui.components.FocusScoreGauge
 import net.focustation.myapplication.ui.components.FocusSectionHeader
 import net.focustation.myapplication.ui.components.MiniLineGraph
-import net.focustation.myapplication.ui.theme.ColorFocus
+import net.focustation.myapplication.ui.theme.ColorLight
+import net.focustation.myapplication.ui.theme.ColorNoise
+import net.focustation.myapplication.ui.theme.ColorVibration
 import net.focustation.myapplication.ui.theme.FocusCanvas
 import net.focustation.myapplication.ui.theme.FocusInk
-import net.focustation.myapplication.ui.theme.FocusMint
 import net.focustation.myapplication.ui.theme.FocusMuted
+import net.focustation.myapplication.ui.theme.FocusSurface
 import net.focustation.myapplication.ui.theme.FocustationTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -59,6 +65,41 @@ fun FocusSessionScreen(
             }
         }
 
+    FocusSessionContent(
+        uiState = uiState,
+        onBack = onBack,
+        onStart = {
+            val hasPermission =
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.RECORD_AUDIO,
+                ) == PackageManager.PERMISSION_GRANTED
+            if (hasPermission) {
+                viewModel.startNoiseCollection()
+                viewModel.startSession()
+            } else {
+                permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            }
+        },
+        onPause = viewModel::pauseSession,
+        onResume = viewModel::startSession,
+        onStop = {
+            viewModel.stopSession()
+            onSessionEnd()
+        },
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FocusSessionContent(
+    uiState: FocusSessionUiState,
+    onBack: () -> Unit,
+    onStart: () -> Unit,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
+    onStop: () -> Unit,
+) {
     val hours = uiState.elapsedSeconds / 3600
     val minutes = (uiState.elapsedSeconds % 3600) / 60
     val seconds = uiState.elapsedSeconds % 60
@@ -90,7 +131,6 @@ fun FocusSessionScreen(
                     .background(FocusCanvas),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // 헤더 영역 — 타이머
             Box(
                 modifier =
                     Modifier
@@ -128,86 +168,57 @@ fun FocusSessionScreen(
                                 "대기 중"
                             },
                         style = MaterialTheme.typography.labelMedium,
-                        color = if (uiState.isRunning) ColorFocus else Color.White.copy(alpha = 0.5f),
+                        color = if (uiState.isRunning) ColorLight else Color.White.copy(alpha = 0.5f),
                     )
                 }
             }
 
-            Spacer(Modifier.height(24.dp))
-
-            // 환경 적합도 게이지
-            FocusSectionHeader(
-                title = "환경 적합도",
-                subtitle = "센서값을 합산한 현재 집중 조건",
-                modifier = Modifier.padding(horizontal = 20.dp),
-            )
-            Spacer(Modifier.height(12.dp))
-            FocusScoreGauge(
-                score = uiState.environmentFitScore,
-                size = 160.dp,
-            )
-
-            Spacer(Modifier.height(20.dp))
-
-            // 적합도 추이 그래프
-            FocusCard(
+            Column(
                 modifier =
                     Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp),
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState())
+                        .padding(top = 24.dp, bottom = 8.dp),
             ) {
-                Column {
-                    Text(
-                        text = "환경 적합도 추이",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = FocusMuted,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    if (uiState.fitHistory.size >= 2) {
-                        MiniLineGraph(
-                            dataPoints = uiState.fitHistory,
-                            lineColor = ColorFocus,
-                            minValue = 0f,
-                            maxValue = 100f,
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .height(80.dp),
-                        )
-                    } else {
-                        Box(
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .height(80.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                "세션 시작 후 그래프가 표시됩니다",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = FocusMuted,
-                            )
-                        }
-                    }
-                }
+                FocusSectionHeader(
+                    title = "실시간 센서",
+                    subtitle = "소음, 조도, 진동 원시값",
+                    modifier = Modifier.padding(horizontal = 20.dp),
+                )
+                Spacer(Modifier.height(12.dp))
+                SensorGaugeRow(uiState = uiState, modifier = Modifier.padding(horizontal = 20.dp))
+                Spacer(Modifier.height(18.dp))
+                SensorHistoryCard(
+                    title = "소음 추이",
+                    valueText = uiState.currentNoiseDb?.let { "%.0f dB".format(it) } ?: "-- dB",
+                    history = uiState.noiseHistory,
+                    lineColor = ColorNoise,
+                    minValue = 20f,
+                    maxValue = 90f,
+                    modifier = Modifier.padding(horizontal = 20.dp),
+                )
+                Spacer(Modifier.height(12.dp))
+                SensorHistoryCard(
+                    title = "조도 추이",
+                    valueText = uiState.currentLightLux?.let { "%.0f lux".format(it) } ?: "-- lux",
+                    history = uiState.lightHistory,
+                    lineColor = ColorLight,
+                    minValue = 0f,
+                    maxValue = 1000f,
+                    modifier = Modifier.padding(horizontal = 20.dp),
+                )
+                Spacer(Modifier.height(12.dp))
+                SensorHistoryCard(
+                    title = "진동 추이",
+                    valueText = uiState.currentVibration?.let { "%.3f".format(it) } ?: "--",
+                    history = uiState.vibrationHistory,
+                    lineColor = ColorVibration,
+                    minValue = 0f,
+                    maxValue = 0.2f,
+                    modifier = Modifier.padding(horizontal = 20.dp),
+                )
             }
 
-            Spacer(Modifier.height(16.dp))
-
-            // 집중 팁 카드
-            FocusInsightCard(
-                title = focusTipTitle(uiState.environmentFitScore),
-                message = focusTipMessage(uiState.environmentFitScore, uiState.isRunning),
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp),
-                accentColor = if (uiState.environmentFitScore >= 60f) FocusMint else ColorFocus,
-            )
-
-            Spacer(Modifier.weight(1f))
-
-            // 컨트롤 버튼
             Row(
                 modifier =
                     Modifier
@@ -218,19 +229,7 @@ fun FocusSessionScreen(
                 when {
                     !uiState.isRunning && !uiState.isPaused -> {
                         Button(
-                            onClick = {
-                                val hasPermission =
-                                    ContextCompat.checkSelfPermission(
-                                        context,
-                                        Manifest.permission.RECORD_AUDIO,
-                                    ) == PackageManager.PERMISSION_GRANTED
-                                if (hasPermission) {
-                                    viewModel.startNoiseCollection()
-                                    viewModel.startSession()
-                                } else {
-                                    permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                                }
-                            },
+                            onClick = onStart,
                             modifier =
                                 Modifier
                                     .weight(1f)
@@ -246,7 +245,7 @@ fun FocusSessionScreen(
 
                     uiState.isRunning -> {
                         OutlinedButton(
-                            onClick = { viewModel.pauseSession() },
+                            onClick = onPause,
                             modifier =
                                 Modifier
                                     .weight(1f)
@@ -258,10 +257,7 @@ fun FocusSessionScreen(
                             Text("일시정지")
                         }
                         Button(
-                            onClick = {
-                                viewModel.stopSession()
-                                onSessionEnd()
-                            },
+                            onClick = onStop,
                             modifier =
                                 Modifier
                                     .weight(1f)
@@ -280,7 +276,7 @@ fun FocusSessionScreen(
 
                     else -> {
                         Button(
-                            onClick = { viewModel.startSession() },
+                            onClick = onResume,
                             modifier =
                                 Modifier
                                     .weight(1f)
@@ -293,10 +289,7 @@ fun FocusSessionScreen(
                             Text("재개")
                         }
                         OutlinedButton(
-                            onClick = {
-                                viewModel.stopSession()
-                                onSessionEnd()
-                            },
+                            onClick = onStop,
                             modifier =
                                 Modifier
                                     .weight(1f)
@@ -314,29 +307,169 @@ fun FocusSessionScreen(
     }
 }
 
-private fun focusTipTitle(score: Float): String =
-    when {
-        score <= 0f -> "세션을 시작하면 상태가 잡혀요"
-        score >= 75f -> "집중 흐름이 안정적이에요"
-        score >= 50f -> "조금만 정리하면 좋아져요"
-        else -> "환경 조정이 먼저 필요해요"
+@Composable
+private fun SensorGaugeRow(
+    uiState: FocusSessionUiState,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        SensorCircleGauge(
+            label = "소음",
+            valueText = uiState.currentNoiseDb?.let { "%.0f".format(it) } ?: "--",
+            unit = "dB",
+            progress = uiState.currentNoiseDb?.toProgress(maxValue = 90f) ?: 0f,
+            color = ColorNoise,
+            modifier = Modifier.weight(1f),
+        )
+        SensorCircleGauge(
+            label = "조도",
+            valueText = uiState.currentLightLux?.let { "%.0f".format(it) } ?: "--",
+            unit = "lux",
+            progress = uiState.currentLightLux?.toProgress(maxValue = 1000f) ?: 0f,
+            color = ColorLight,
+            modifier = Modifier.weight(1f),
+        )
+        SensorCircleGauge(
+            label = "진동",
+            valueText = uiState.currentVibration?.let { "%.3f".format(it) } ?: "--",
+            unit = "",
+            progress = uiState.currentVibration?.toFloat()?.toProgress(maxValue = 0.2f) ?: 0f,
+            color = ColorVibration,
+            modifier = Modifier.weight(1f),
+        )
     }
+}
 
-private fun focusTipMessage(
-    score: Float,
-    isRunning: Boolean,
-): String =
-    when {
-        score <= 0f && !isRunning -> "마이크 권한을 허용하고 집중 시작을 누르면 소음, 조도, 진동을 함께 추적합니다."
-        score >= 75f -> "지금 상태를 유지하면서 작업을 시작해도 좋아요. 세션이 끝나면 리포트에서 흐름을 확인할 수 있어요."
-        score >= 50f -> "주변 소리나 조명을 한 번만 조정해보세요. 작은 변화가 점수에 바로 반영됩니다."
-        else -> "자리 이동, 조명 조정, 소음 차단 중 하나를 먼저 시도한 뒤 다시 흐름을 이어가세요."
+@Composable
+private fun SensorCircleGauge(
+    label: String,
+    valueText: String,
+    unit: String,
+    progress: Float,
+    color: Color,
+    modifier: Modifier = Modifier,
+) {
+    FocusCard(
+        modifier = modifier.height(136.dp),
+        containerColor = FocusSurface,
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 12.dp),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Canvas(modifier = Modifier.size(70.dp)) {
+                    val strokeWidth = 8.dp.toPx()
+                    drawArc(
+                        color = color.copy(alpha = 0.16f),
+                        startAngle = -90f,
+                        sweepAngle = 360f,
+                        useCenter = false,
+                        style = Stroke(strokeWidth, cap = StrokeCap.Round),
+                    )
+                    drawArc(
+                        color = color,
+                        startAngle = -90f,
+                        sweepAngle = 360f * progress.coerceIn(0f, 1f),
+                        useCenter = false,
+                        style = Stroke(strokeWidth, cap = StrokeCap.Round),
+                    )
+                }
+                Text(
+                    text = valueText,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                    color = FocusInk,
+                    textAlign = TextAlign.Center,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(label, style = MaterialTheme.typography.labelMedium, color = FocusInk)
+            if (unit.isNotBlank()) {
+                Text(unit, style = MaterialTheme.typography.labelSmall, color = FocusMuted)
+            }
+        }
     }
+}
+
+@Composable
+private fun SensorHistoryCard(
+    title: String,
+    valueText: String,
+    history: List<Float>,
+    lineColor: Color,
+    minValue: Float,
+    maxValue: Float,
+    modifier: Modifier = Modifier,
+) {
+    FocusCard(modifier = modifier.fillMaxWidth()) {
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(title, style = MaterialTheme.typography.labelLarge, color = FocusMuted)
+                Text(
+                    text = valueText,
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                    color = FocusInk,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            if (history.size >= 2) {
+                MiniLineGraph(
+                    dataPoints = history,
+                    lineColor = lineColor,
+                    minValue = minValue,
+                    maxValue = maxValue,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(76.dp),
+                )
+            } else {
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(76.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("측정값 대기 중", style = MaterialTheme.typography.bodySmall, color = FocusMuted)
+                }
+            }
+        }
+    }
+}
+
+private fun Float.toProgress(maxValue: Float): Float = (this / maxValue).coerceIn(0f, 1f)
 
 @Preview(showBackground = true)
 @Composable
 private fun FocusSessionPreview() {
     FocustationTheme {
-        FocusSessionScreen(onSessionEnd = {}, onBack = {})
+        FocusSessionContent(
+            uiState =
+                FocusSessionUiState(
+                    isRunning = true,
+                    elapsedSeconds = 1_275,
+                    currentNoiseDb = 34f,
+                    currentLightLux = 520f,
+                    currentVibration = 0.032,
+                    noiseHistory = listOf(32f, 35f, 33f, 38f, 34f, 36f),
+                    lightHistory = listOf(420f, 460f, 520f, 500f, 540f, 510f),
+                    vibrationHistory = listOf(0.018f, 0.026f, 0.021f, 0.034f, 0.029f, 0.032f),
+                ),
+            onBack = {},
+            onStart = {},
+            onPause = {},
+            onResume = {},
+            onStop = {},
+        )
     }
 }

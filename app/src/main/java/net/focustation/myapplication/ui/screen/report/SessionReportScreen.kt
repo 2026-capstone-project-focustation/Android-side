@@ -93,10 +93,10 @@ fun SessionReportScreen(
 
     val sortedHistory =
         remember(uiState.history, uiState.sortOption) { uiState.history.sortedBy(uiState.sortOption) }
+    val mlScores = remember(uiState.history) { uiState.history.mapNotNull { it.displayMlScore() } }
     val averageScore =
-        if (uiState.history.isNotEmpty()) {
-            uiState.history
-                .map { it.focusScore }
+        if (mlScores.isNotEmpty()) {
+            mlScores
                 .average()
                 .toFloat()
         } else {
@@ -159,12 +159,12 @@ fun SessionReportScreen(
                 item {
                     Box(modifier = Modifier.padding(horizontal = 16.dp)) {
                         ProgressGaugeCard(
-                            title = "평균 환경적합도 점수",
+                            title = "환경적합도 점수",
                             subtitle =
-                                if (uiState.history.isEmpty()) {
-                                    "저장된 세션이 생기면 평균 점수가 표시돼요."
+                                if (mlScores.isEmpty()) {
+                                    "ML 환경적합도 점수가 생성되면 표시돼요."
                                 } else {
-                                    "저장된 ${uiState.history.size}개 세션의 평균은 ${averageScore.toInt()}점이에요."
+                                    "ML 기준 ${mlScores.size}개 세션 평균은 ${averageScore.toInt()}점이에요."
                                 },
                             percent = (averageScore / 100f).coerceIn(0f, 1f),
                         )
@@ -418,7 +418,7 @@ private fun SessionReportCard(
 }
 
 @Composable
-private fun ScoreBadge(score: Int) {
+private fun ScoreBadge(score: Int?) {
     Box(
         modifier =
             Modifier
@@ -428,7 +428,7 @@ private fun ScoreBadge(score: Int) {
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            text = score.toString(),
+            text = score?.toString() ?: "--",
             color = FocusInk,
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
         )
@@ -524,7 +524,11 @@ private fun Int.formatTotalTime(): String {
 private fun List<StudyHistoryUiItem>.sortedBy(option: ReportSortOption): List<StudyHistoryUiItem> =
     when (option) {
         ReportSortOption.LATEST -> sortedByDescending { it.endedAtEpochMillis }
-        ReportSortOption.SCORE_HIGH -> sortedByDescending { it.displayScore() }
+        ReportSortOption.SCORE_HIGH ->
+            sortedWith(
+                compareByDescending<StudyHistoryUiItem> { it.displayMlScore() != null }
+                    .thenByDescending { it.displayMlScore() ?: 0 },
+            )
         ReportSortOption.DURATION_LONG -> sortedByDescending { it.durationMinutes }
         ReportSortOption.PLACE_NAME -> sortedBy { it.placeName }
     }
@@ -533,10 +537,11 @@ private fun List<StudyHistoryUiItem>.sortedBy(option: ReportSortOption): List<St
 private val StudyHistoryUiItem.validMlScore: Double?
     get() = mlScore?.takeIf { it >= 0.0 }
 
-private fun StudyHistoryUiItem.displayScore(): Int = (validMlScore?.toInt() ?: focusScore).coerceIn(0, 100)
+private fun StudyHistoryUiItem.displayScore(): Int? = displayMlScore()
 
-private fun StudyHistoryUiItem.scoreSummaryLabel(): String =
-    validMlScore?.let { "ML ${it.toInt()}점 · 집중 ${focusScore}점" } ?: "집중 ${focusScore}점"
+private fun StudyHistoryUiItem.displayMlScore(): Int? = validMlScore?.toInt()?.coerceIn(0, 100)
+
+private fun StudyHistoryUiItem.scoreSummaryLabel(): String = displayMlScore()?.let { "ML 적합도 ${it}점" } ?: "ML 점수 미생성"
 
 private fun ReportSortOption.label(): String =
     when (this) {
@@ -546,8 +551,9 @@ private fun ReportSortOption.label(): String =
         ReportSortOption.PLACE_NAME -> "장소순"
     }
 
-private fun scoreTint(score: Int): Color =
+private fun scoreTint(score: Int?): Color =
     when {
+        score == null -> Color(0xFFF0F2F5)
         score >= 85 -> ReferenceDesignTokens.PaleBlueTrack
         score >= 70 -> Color(0xFFFFF2D7)
         else -> Color(0xFFF1E8FF)

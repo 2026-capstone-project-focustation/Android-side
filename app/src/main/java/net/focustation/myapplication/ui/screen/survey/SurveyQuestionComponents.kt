@@ -21,8 +21,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import net.focustation.myapplication.ui.components.ReferenceDesignTokens
+import net.focustation.myapplication.ui.theme.FocustationTheme
 
 // 설문·세션 피드백이 공유하는 질문 입력 컴포저블. 디자인 토큰·동작을 한곳에서 관리한다.
 
@@ -246,3 +248,40 @@ fun SurveyOption.displayLabel(): String =
         "privacy" -> "프라이버시"
         else -> label
     }
+
+@Preview(showBackground = true)
+@Composable
+private fun SurveyQuestionComponentsPreview() {
+    FocustationTheme {
+        Surface(color = ReferenceDesignTokens.Screen) {
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp),
+            ) {
+                SingleChoiceQuestion(
+                    options = placeTypeOptions.take(5),
+                    selectedValue = "library",
+                    onSelected = {},
+                )
+                MultiChoiceQuestion(
+                    options = distractionOptions,
+                    selectedValues = setOf("noise", "outlet"),
+                    onToggle = {},
+                )
+                LikertChoiceQuestion(
+                    score = 4,
+                    lowLabel = "낮음",
+                    highLabel = "높음",
+                    onScoreChange = {},
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    ChoiceButton(text = "선택됨", selected = true, onClick = {})
+                    ChoiceButton(text = "기본", selected = false, onClick = {})
+                }
+            }
+        }
+    }
+}

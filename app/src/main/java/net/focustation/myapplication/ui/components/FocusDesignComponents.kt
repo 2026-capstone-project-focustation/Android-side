@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import net.focustation.myapplication.ui.theme.FocusBlue
@@ -54,6 +55,7 @@ import net.focustation.myapplication.ui.theme.FocusMint
 import net.focustation.myapplication.ui.theme.FocusMuted
 import net.focustation.myapplication.ui.theme.FocusSurface
 import net.focustation.myapplication.ui.theme.FocusYellow
+import net.focustation.myapplication.ui.theme.FocustationTheme
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -400,5 +402,51 @@ fun FocusProgressTrack(
             strokeWidth = stroke,
             cap = StrokeCap.Round,
         )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun FocusDesignComponentsPreview() {
+    FocustationTheme {
+        FocusScreenBackground {
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                FocusSectionHeader(
+                    title = "집중 환경",
+                    subtitle = "현재 공간의 센서 상태를 요약합니다.",
+                    trailing = {
+                        FocusMetricPill(label = "점수", value = "82", color = FocusBlue)
+                    },
+                )
+                FocusCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        FocusInsightCard(
+                            title = "소음 안정",
+                            message = "최근 측정값이 조용한 편으로 유지되고 있어요.",
+                            accentColor = FocusMint,
+                        )
+                        FocusProgressTrack(progress = 0.72f, modifier = Modifier.fillMaxWidth())
+                        FocusPrimaryButton(text = "세션 시작", onClick = {}, modifier = Modifier.fillMaxWidth())
+                    }
+                }
+                FocusEmptyState(
+                    title = "아직 리포트가 없어요",
+                    message = "첫 세션을 마치면 이곳에 분석 기록이 쌓입니다.",
+                    actionLabel = "측정 시작",
+                    onAction = {},
+                )
+                AnimatedFocusOrb(
+                    score = 82,
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                    size = 180.dp,
+                )
+            }
+        }
     }
 }

@@ -38,3 +38,14 @@ data class FocusDataPoint(
     val timeLabel: String,
     val focusScore: Float,
 )
+
+data class SensorTimelinePoint(
+    val timeLabel: String,
+    val value: Float,
+)
+
+data class SensorTimelines(
+    val noise: List<SensorTimelinePoint> = emptyList(),
+    val light: List<SensorTimelinePoint> = emptyList(),
+    val vibration: List<SensorTimelinePoint> = emptyList(),
+)
