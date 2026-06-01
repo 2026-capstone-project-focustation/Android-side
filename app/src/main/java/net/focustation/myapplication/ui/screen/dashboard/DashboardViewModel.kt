@@ -93,12 +93,11 @@ class DashboardViewModel(
                             (record.durationSec / 60).coerceAtLeast(1)
                         }
 
-                    val latest = sorted.firstOrNull()
                     val snapshot =
                         EnvironmentSnapshot(
-                            noiseLevel = latest?.avgNoise ?: 0f,
-                            illuminance = latest?.avgIlluminance ?: 0f,
-                            vibration = latest?.avgVibration ?: 0.0,
+                            noiseLevel = 0f,
+                            illuminance = 0f,
+                            vibration = 0.0,
                         )
 
                     DebugLog.d(
@@ -110,7 +109,7 @@ class DashboardViewModel(
                             todayAvgFocus = todayAvgFocus,
                             todayWorkMinutes = todayWorkMinutes,
                             hasTodaySessions = todayRecords.isNotEmpty(),
-                            hasEnvironmentSnapshot = latest != null,
+                            hasEnvironmentSnapshot = false,
                             environmentSnapshot = snapshot,
                             recentSessions = recentTop3,
                             isLoading = false,

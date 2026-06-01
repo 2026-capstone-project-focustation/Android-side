@@ -175,7 +175,7 @@ fun DashboardScreen(
 
                 item {
                     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                        SectionHeader(title = "지금 공간 상태", subtitle = "최근 측정값 기준")
+                        SectionHeader(title = "지금 공간 상태", subtitle = "측정 시작 후 표시")
                         Spacer(Modifier.height(18.dp))
                         DashboardEnvironmentSummary(
                             hasData = uiState.hasEnvironmentSnapshot,
