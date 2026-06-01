@@ -19,7 +19,6 @@ import net.focustation.myapplication.data.repository.FirestoreSurveyRepository
 import net.focustation.myapplication.data.repository.PlaceSnapshotPayload
 import net.focustation.myapplication.data.repository.SavedPlaceRequest
 import net.focustation.myapplication.data.repository.SessionApiRepository
-import net.focustation.myapplication.score.ScoreCalculator
 import net.focustation.myapplication.sensor.LightSensorManager
 import net.focustation.myapplication.sensor.NoiseSensorManager
 import net.focustation.myapplication.sensor.VibrationSensorManager
@@ -42,8 +41,9 @@ data class EnvironmentSessionUiState(
     val elapsedSeconds: Int = 0,
     val totalSessionSeconds: Int = 300, // 5분
     val noiseHistory: List<Float> = emptyList(),
+    val lightHistory: List<Float> = emptyList(),
+    val vibrationHistory: List<Float> = emptyList(),
     val currentSnapshot: EnvironmentSnapshot = EnvironmentSnapshot(),
-    val environmentScore: Float = 0f, // 0~100
 )
 
 class EnvironmentSessionViewModel(
@@ -108,38 +108,28 @@ class EnvironmentSessionViewModel(
             }
     }
 
-    /**
-     * Updates the UI state with component scores and an aggregated environment score derived from available sensor buffers.
-     *
-     * Computes light and vibration component scores when their buffers contain samples, and includes a noise component
-     * only when noise permission has been granted and noise samples exist. Then updates the current snapshot using the
-     * most recent buffered values (retaining previous snapshot values for any empty buffer), refreshes the displayed
-     * noise history to the most recent samples, and sets the aggregated environment score.
-     */
     private fun recalculate() {
-        val lightScore = if (lightBuf.isNotEmpty()) ScoreCalculator.calculateLightScore(lightBuf.toList()) else null
-        val noiseScore =
-            if (hasNoisePerm &&
-                noiseBuf.isNotEmpty()
-            ) {
-                ScoreCalculator.calculateNoiseScore(noiseBuf.toList())
-            } else {
-                null
-            }
-        val vibScore = if (vibBuf.isNotEmpty()) ScoreCalculator.calculateVibrationScore(vibBuf.toList()) else null
-
-        val total = ScoreCalculator.calculateTotalScore(listOfNotNull(lightScore, noiseScore, vibScore)).toFloat()
-
         _uiState.update { s ->
             s.copy(
                 currentSnapshot =
                     EnvironmentSnapshot(
-                        noiseLevel = noiseBuf.lastOrNull()?.toFloat() ?: s.currentSnapshot.noiseLevel,
+                        noiseLevel =
+                            if (hasNoisePerm) {
+                                noiseBuf.lastOrNull()?.toFloat() ?: s.currentSnapshot.noiseLevel
+                            } else {
+                                s.currentSnapshot.noiseLevel
+                            },
                         illuminance = lightBuf.lastOrNull() ?: s.currentSnapshot.illuminance,
                         vibration = vibBuf.lastOrNull() ?: s.currentSnapshot.vibration,
                     ),
-                noiseHistory = noiseBuf.takeLast(DISPLAY_HISTORY).map { it.toFloat() },
-                environmentScore = total,
+                noiseHistory =
+                    if (hasNoisePerm) {
+                        noiseBuf.takeLast(DISPLAY_HISTORY).map { it.toFloat() }
+                    } else {
+                        s.noiseHistory
+                    },
+                lightHistory = lightBuf.takeLast(DISPLAY_HISTORY),
+                vibrationHistory = vibBuf.takeLast(DISPLAY_HISTORY).map { it.toFloat() },
             )
         }
     }
@@ -161,8 +151,9 @@ class EnvironmentSessionViewModel(
                     isCompleted = false,
                     elapsedSeconds = 0,
                     noiseHistory = emptyList(),
+                    lightHistory = emptyList(),
+                    vibrationHistory = emptyList(),
                     currentSnapshot = EnvironmentSnapshot(),
-                    environmentScore = 0f,
                 )
             }
         } else {
