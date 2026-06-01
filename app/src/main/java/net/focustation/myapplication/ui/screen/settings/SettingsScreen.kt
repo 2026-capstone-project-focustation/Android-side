@@ -14,21 +14,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CloudUpload
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.NotificationsActive
-import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -37,7 +29,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -46,7 +37,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -67,6 +57,25 @@ fun SettingsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
+    SettingsContent(
+        uiState = uiState,
+        onBack = onBack,
+        onNavigateToHome = onNavigateToHome,
+        onNavigateToReport = onNavigateToReport,
+        onNavigateToSpaceHistory = onNavigateToSpaceHistory,
+        onSignOut = viewModel::signOut,
+    )
+}
+
+@Composable
+private fun SettingsContent(
+    uiState: SettingsUiState,
+    onBack: () -> Unit,
+    onNavigateToHome: () -> Unit,
+    onNavigateToReport: () -> Unit,
+    onNavigateToSpaceHistory: () -> Unit,
+    onSignOut: () -> Unit,
+) {
     Scaffold(
         containerColor = ReferenceDesignTokens.Screen,
         bottomBar = {
@@ -97,60 +106,13 @@ fun SettingsScreen(
                 userName = uiState.userName,
                 userEmail = uiState.userEmail,
                 onBack = onBack,
-                onSignOut = viewModel::signOut,
+                onSignOut = onSignOut,
             )
 
             Column(
                 modifier = Modifier.padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
-                SettingsGroup(title = "환경 설정") {
-                    SamplingCard(
-                        seconds = uiState.sensorSamplingSeconds,
-                        onSecondsChange = viewModel::setSamplingInterval,
-                    )
-                }
-
-                SettingsGroup(title = "알림") {
-                    SettingsItemColumn {
-                        ToggleListItem(
-                            icon = Icons.Filled.NotificationsActive,
-                            title = "집중 저하 알림",
-                            subtitle = "집중도가 낮아지면 바로 알려줘요",
-                            checked = uiState.focusDropAlertEnabled,
-                            onCheckedChange = viewModel::toggleFocusDropAlert,
-                        )
-                        ItemDivider()
-                        ToggleListItem(
-                            icon = Icons.Filled.NotificationsNone,
-                            title = "세션 완료 알림",
-                            subtitle = "환경 분석 세션이 끝나면 알려줘요",
-                            checked = uiState.sessionCompleteAlertEnabled,
-                            onCheckedChange = viewModel::toggleSessionCompleteAlert,
-                        )
-                    }
-                }
-
-                SettingsGroup(title = "데이터 & 테마") {
-                    SettingsItemColumn {
-                        ToggleListItem(
-                            icon = Icons.Filled.CloudUpload,
-                            title = "익명 업로드",
-                            subtitle = "데이터를 익명화해서 연구에 기여해요",
-                            checked = uiState.anonymousUploadEnabled,
-                            onCheckedChange = viewModel::toggleAnonymousUpload,
-                        )
-                        ItemDivider()
-                        ToggleListItem(
-                            icon = Icons.Filled.DarkMode,
-                            title = "다크 모드",
-                            subtitle = "어두운 테마로 전환해요",
-                            checked = uiState.isDarkTheme,
-                            onCheckedChange = viewModel::toggleDarkTheme,
-                        )
-                    }
-                }
-
                 SettingsGroup(title = "앱 정보") {
                     SettingsItemColumn {
                         InfoListItem(label = "버전", value = "1.0.0")
@@ -310,166 +272,6 @@ private fun ItemDivider() {
 }
 
 @Composable
-private fun ToggleListItem(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    SettingsRow(icon = icon, title = title, subtitle = subtitle) {
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
-    }
-}
-
-@Composable
-private fun ActionListItem(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    trailing: @Composable () -> Unit,
-) {
-    SettingsRow(
-        icon = icon,
-        title = title,
-        subtitle = subtitle,
-        trailing = trailing,
-    )
-}
-
-@Composable
-private fun SettingsRow(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    trailing: @Composable () -> Unit,
-) {
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        SettingsIconTile(icon = icon)
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                color = ReferenceDesignTokens.TextPrimary,
-                style = MaterialTheme.typography.labelLarge,
-                maxLines = 1,
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = subtitle,
-                color = ReferenceDesignTokens.TextSecondary,
-                style = MaterialTheme.typography.labelSmall,
-                maxLines = 1,
-            )
-        }
-        trailing()
-    }
-}
-
-@Composable
-private fun SamplingCard(
-    seconds: Int,
-    onSecondsChange: (Int) -> Unit,
-) {
-    SettingsItemColumn {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            SettingsIconTile(icon = Icons.Filled.Sensors)
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "센서 샘플링 주기",
-                    color = ReferenceDesignTokens.TextPrimary,
-                    style = MaterialTheme.typography.labelLarge,
-                    maxLines = 1,
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = "몇 초마다 환경을 확인할지",
-                    color = ReferenceDesignTokens.TextSecondary,
-                    style = MaterialTheme.typography.labelSmall,
-                    maxLines = 1,
-                )
-            }
-            SamplingStepper(
-                seconds = seconds,
-                onSecondsChange = onSecondsChange,
-            )
-        }
-    }
-}
-
-@Composable
-private fun SamplingStepper(
-    seconds: Int,
-    onSecondsChange: (Int) -> Unit,
-) {
-    val min = 1
-    val max = 30
-    Row(
-        modifier =
-            Modifier
-                .clip(RoundedCornerShape(14.dp))
-                .background(ReferenceDesignTokens.PaleBlueTrack),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        StepperButton(
-            icon = Icons.Filled.Remove,
-            enabled = seconds > min,
-            onClick = { onSecondsChange((seconds - 1).coerceAtLeast(min)) },
-        )
-        Text(
-            text = "${seconds}s",
-            color = ReferenceDesignTokens.TextPrimary,
-            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-            modifier = Modifier.width(38.dp),
-            textAlign = TextAlign.Center,
-        )
-        StepperButton(
-            icon = Icons.Filled.Add,
-            enabled = seconds < max,
-            onClick = { onSecondsChange((seconds + 1).coerceAtMost(max)) },
-        )
-    }
-}
-
-@Composable
-private fun StepperButton(
-    icon: ImageVector,
-    enabled: Boolean,
-    onClick: () -> Unit,
-) {
-    IconButton(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = Modifier.size(36.dp),
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint =
-                if (enabled) {
-                    ReferenceDesignTokens.BlueDark
-                } else {
-                    ReferenceDesignTokens.TextMuted
-                },
-            modifier = Modifier.size(18.dp),
-        )
-    }
-}
-
-@Composable
 private fun InfoListItem(
     label: String,
     value: String,
@@ -495,29 +297,21 @@ private fun InfoListItem(
     }
 }
 
-@Composable
-private fun SettingsIconTile(icon: ImageVector) {
-    Box(
-        modifier =
-            Modifier
-                .size(44.dp)
-                .clip(RoundedCornerShape(13.dp))
-                .background(ReferenceDesignTokens.PaleBlueTrack),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = ReferenceDesignTokens.BlueDark,
-            modifier = Modifier.size(20.dp),
-        )
-    }
-}
-
 @Preview(showBackground = true)
 @Composable
 private fun SettingsPreview() {
     FocustationTheme {
-        SettingsScreen(onBack = {})
+        SettingsContent(
+            uiState =
+                SettingsUiState(
+                    userName = "김예찬",
+                    userEmail = "user@focustation.net",
+                ),
+            onBack = {},
+            onNavigateToHome = {},
+            onNavigateToReport = {},
+            onNavigateToSpaceHistory = {},
+            onSignOut = {},
+        )
     }
 }
