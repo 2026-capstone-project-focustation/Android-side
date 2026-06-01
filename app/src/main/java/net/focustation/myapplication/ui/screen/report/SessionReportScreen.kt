@@ -536,7 +536,7 @@ private val StudyHistoryUiItem.validMlScore: Double?
 private fun StudyHistoryUiItem.displayScore(): Int = (validMlScore?.toInt() ?: focusScore).coerceIn(0, 100)
 
 private fun StudyHistoryUiItem.scoreSummaryLabel(): String =
-    validMlScore?.let { "ML ${it.toInt()}점 · 환경 ${focusScore}점" } ?: "환경 ${focusScore}점"
+    validMlScore?.let { "ML ${it.toInt()}점 · 집중 ${focusScore}점" } ?: "집중 ${focusScore}점"
 
 private fun ReportSortOption.label(): String =
     when (this) {

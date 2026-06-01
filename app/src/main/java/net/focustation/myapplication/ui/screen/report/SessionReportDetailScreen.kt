@@ -218,7 +218,7 @@ private fun SessionDetailHero(session: StudySessionRecord) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 HeroMetric("집중 시간", "${(session.durationSec / 60).coerceAtLeast(1)}분", Modifier.weight(1f))
                 HeroMetric(
-                    if (session.validMlScore == null) "환경 점수" else "ML 적합도",
+                    if (session.validMlScore == null) "집중 점수" else "ML 적합도",
                     "${session.displayScore()}점",
                     Modifier.weight(1f),
                 )
