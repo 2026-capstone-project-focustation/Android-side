@@ -179,63 +179,63 @@ private fun EnvironmentSessionContent(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             EnvironmentTopBar(onBack = onBack)
-            EnvironmentTimerCard(
-                remainingSeconds = remaining,
-                progress = progress,
-                isRunning = uiState.isRunning,
-                isPaused = uiState.isPaused,
-                isCompleted = uiState.isCompleted,
-            )
-            EnvironmentMetricGrid(
-                noise = uiState.currentSnapshot.noiseLevel,
-                illuminance = uiState.currentSnapshot.illuminance,
-                vibration = uiState.currentSnapshot.vibration,
-            )
             if (uiState.isCompleted) {
-                EnvironmentScoreCard(
+                EnvironmentResultPanel(
                     score =
                         calculateEnvironmentScore(
                             noise = uiState.currentSnapshot.noiseLevel,
                             illuminance = uiState.currentSnapshot.illuminance,
                             vibration = uiState.currentSnapshot.vibration,
                         ),
+                    onRetry = onRetry,
+                    onContinue = onContinue,
+                )
+            } else {
+                EnvironmentTimerCard(
+                    remainingSeconds = remaining,
+                    progress = progress,
+                    isRunning = uiState.isRunning,
+                    isPaused = uiState.isPaused,
+                    isCompleted = uiState.isCompleted,
+                )
+                EnvironmentControlButtons(
+                    isRunning = uiState.isRunning,
+                    isPaused = uiState.isPaused,
+                    onStart = onStart,
+                    onPause = onPause,
+                    onResume = onResume,
+                    onFinish = onFinish,
+                )
+                EnvironmentMetricGrid(
+                    noise = uiState.currentSnapshot.noiseLevel,
+                    illuminance = uiState.currentSnapshot.illuminance,
+                    vibration = uiState.currentSnapshot.vibration,
+                )
+                EnvironmentSensorGraphCard(
+                    title = "소음 추이",
+                    history = uiState.noiseHistory,
+                    statusText = sensorGraphStatusLabel(uiState),
+                    lineColor = ColorNoise,
+                    minValue = 20f,
+                    maxValue = 90f,
+                )
+                EnvironmentSensorGraphCard(
+                    title = "조도 추이",
+                    history = uiState.lightHistory,
+                    statusText = sensorGraphStatusLabel(uiState),
+                    lineColor = ColorLight,
+                    minValue = 0f,
+                    maxValue = 1000f,
+                )
+                EnvironmentSensorGraphCard(
+                    title = "진동 추이",
+                    history = uiState.vibrationHistory,
+                    statusText = sensorGraphStatusLabel(uiState),
+                    lineColor = ColorVibration,
+                    minValue = 0f,
+                    maxValue = 0.2f,
                 )
             }
-            EnvironmentSensorGraphCard(
-                title = "소음 추이",
-                history = uiState.noiseHistory,
-                statusText = sensorGraphStatusLabel(uiState),
-                lineColor = ColorNoise,
-                minValue = 20f,
-                maxValue = 90f,
-            )
-            EnvironmentSensorGraphCard(
-                title = "조도 추이",
-                history = uiState.lightHistory,
-                statusText = sensorGraphStatusLabel(uiState),
-                lineColor = ColorLight,
-                minValue = 0f,
-                maxValue = 1000f,
-            )
-            EnvironmentSensorGraphCard(
-                title = "진동 추이",
-                history = uiState.vibrationHistory,
-                statusText = sensorGraphStatusLabel(uiState),
-                lineColor = ColorVibration,
-                minValue = 0f,
-                maxValue = 0.2f,
-            )
-            EnvironmentControlButtons(
-                isRunning = uiState.isRunning,
-                isPaused = uiState.isPaused,
-                isCompleted = uiState.isCompleted,
-                onStart = onStart,
-                onPause = onPause,
-                onResume = onResume,
-                onFinish = onFinish,
-                onRetry = onRetry,
-                onContinue = onContinue,
-            )
         }
     }
 }
@@ -423,43 +423,83 @@ private fun EnvironmentMetricGrid(
 }
 
 @Composable
-private fun EnvironmentScoreCard(score: Int) {
+private fun EnvironmentResultPanel(
+    score: Int,
+    onRetry: () -> Unit,
+    onContinue: () -> Unit,
+) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        color = ReferenceDesignTokens.Blue,
+        shape = RoundedCornerShape(ReferenceDesignTokens.PhoneRadius),
+        color = ReferenceDesignTokens.Dark,
         shadowElevation = 0.dp,
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 22.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Box(
                 modifier =
                     Modifier
-                        .size(52.dp)
+                        .size(132.dp)
                         .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.18f)),
+                        .background(ReferenceDesignTokens.Yellow),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = score.toString(),
-                    color = Color.White,
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black),
+                    color = ReferenceDesignTokens.TextPrimary,
+                    style = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.Black),
                 )
             }
-            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
                 Text(
-                    text = "현재 공간 적합도",
+                    text = "환경 적합도",
                     color = Color.White,
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
+                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
                 )
                 Text(
                     text = environmentScoreLabel(score),
                     color = Color.White.copy(alpha = 0.76f),
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                 )
+                Text(
+                    text = "소음, 조도, 진동 측정값으로 계산한 온디바이스 점수예요.",
+                    color = Color.White.copy(alpha = 0.58f),
+                    style = MaterialTheme.typography.labelSmall,
+                    textAlign = TextAlign.Center,
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                OutlinedButton(
+                    onClick = onRetry,
+                    modifier = Modifier.weight(1f).height(56.dp),
+                    shape = RoundedCornerShape(18.dp),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.24f)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                ) {
+                    Text("다시 측정", fontWeight = FontWeight.Bold)
+                }
+                Button(
+                    onClick = onContinue,
+                    modifier = Modifier.weight(1f).height(56.dp),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ReferenceDesignTokens.Yellow),
+                ) {
+                    Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("집중 시작", fontWeight = FontWeight.ExtraBold)
+                }
             }
         }
     }
@@ -602,13 +642,10 @@ private fun EnvironmentSensorGraphCard(
 private fun EnvironmentControlButtons(
     isRunning: Boolean,
     isPaused: Boolean,
-    isCompleted: Boolean,
     onStart: () -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
     onFinish: () -> Unit,
-    onRetry: () -> Unit,
-    onContinue: () -> Unit,
 ) {
     Row(
         modifier =
@@ -618,37 +655,6 @@ private fun EnvironmentControlButtons(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         when {
-            isCompleted -> {
-                OutlinedButton(
-                    onClick = onRetry,
-                    modifier =
-                        Modifier
-                            .weight(1f)
-                            .height(56.dp),
-                    shape = RoundedCornerShape(18.dp),
-                    border = BorderStroke(1.dp, ReferenceDesignTokens.Border),
-                    colors =
-                        ButtonDefaults.outlinedButtonColors(
-                            contentColor = ReferenceDesignTokens.TextPrimary,
-                        ),
-                ) {
-                    Text("다시 측정", fontWeight = FontWeight.Bold)
-                }
-                Button(
-                    onClick = onContinue,
-                    modifier =
-                        Modifier
-                            .weight(1f)
-                            .height(56.dp),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = ReferenceDesignTokens.Dark),
-                ) {
-                    Icon(Icons.Filled.PlayArrow, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text("집중 시작", fontWeight = FontWeight.ExtraBold)
-                }
-            }
-
             !isRunning && !isPaused -> {
                 Button(
                     onClick = onStart,
