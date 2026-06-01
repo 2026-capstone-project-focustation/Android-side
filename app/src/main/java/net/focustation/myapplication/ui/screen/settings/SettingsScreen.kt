@@ -53,6 +53,7 @@ fun SettingsScreen(
     onNavigateToHome: () -> Unit = {},
     onNavigateToReport: () -> Unit = {},
     onNavigateToSpaceHistory: () -> Unit = {},
+    onSignedOut: () -> Unit = {},
     viewModel: SettingsViewModel = viewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -63,7 +64,10 @@ fun SettingsScreen(
         onNavigateToHome = onNavigateToHome,
         onNavigateToReport = onNavigateToReport,
         onNavigateToSpaceHistory = onNavigateToSpaceHistory,
-        onSignOut = viewModel::signOut,
+        onSignOut = {
+            viewModel.signOut()
+            onSignedOut()
+        },
     )
 }
 

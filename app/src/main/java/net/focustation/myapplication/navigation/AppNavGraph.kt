@@ -44,8 +44,15 @@ fun AppNavGraph(navController: NavHostController) {
         composable(NavRoute.Login.route) {
             LoginScreen(
                 onLoginSuccess = {
-                    navController.navigate(NavRoute.OnboardingSetup.route) {
+                    val nextRoute =
+                        if (onboardingStore.isCompleted()) {
+                            NavRoute.Dashboard.route
+                        } else {
+                            NavRoute.OnboardingSetup.route
+                        }
+                    navController.navigate(nextRoute) {
                         popUpTo(NavRoute.Login.route) { inclusive = true }
+                        launchSingleTop = true
                     }
                 },
             )
@@ -221,6 +228,9 @@ fun AppNavGraph(navController: NavHostController) {
                 onNavigateToSpaceHistory = {
                     navController.navigateToMainTab(NavRoute.SpaceHistory.route)
                 },
+                onSignedOut = {
+                    navController.navigateToLoginAfterSignOut()
+                },
             )
         }
     }
@@ -247,6 +257,13 @@ private fun NavHostController.navigateHomeAfterSession() {
 private fun NavHostController.navigateToCreatedReport(sessionId: String) {
     navigate(NavRoute.SessionReportDetail.createRoute(sessionId)) {
         popUpTo(NavRoute.Dashboard.route)
+        launchSingleTop = true
+    }
+}
+
+private fun NavHostController.navigateToLoginAfterSignOut() {
+    navigate(NavRoute.Login.route) {
+        popUpTo(0) { inclusive = true }
         launchSingleTop = true
     }
 }
