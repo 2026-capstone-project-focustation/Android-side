@@ -26,7 +26,9 @@ import net.focustation.myapplication.session.SessionReportDraft
 import net.focustation.myapplication.session.SessionReportDraftStore
 import net.focustation.myapplication.ui.screen.survey.placeRatingQuestions
 import net.focustation.myapplication.util.DebugLog
+import java.time.Instant
 import java.time.LocalDateTime
+import java.time.ZoneId
 import kotlin.math.roundToInt
 
 // ─── 환경 분석 세션 ───────────────────────────────────────────────────────────
@@ -435,6 +437,8 @@ class FocusSessionViewModel(
                 placeLongitude = selectedPlace?.longitude,
                 placeAddress = selectedPlace?.address.orEmpty(),
                 placeCategory = selectedPlace?.category.orEmpty(),
+                elapsedSeconds = state.elapsedSeconds,
+                sessionEndEpochMillis = System.currentTimeMillis(),
             ),
         )
         DebugLog.d("[집중세션][종료] draft 저장 완료")
@@ -628,15 +632,23 @@ class FeedbackSessionViewModel(
         draft: SessionReportDraft,
         state: FeedbackUiState,
     ): CreateSessionRequest {
-        val now = LocalDateTime.now()
+        val endTime =
+            if (draft.sessionEndEpochMillis > 0L) {
+                Instant
+                    .ofEpochMilli(draft.sessionEndEpochMillis)
+                    .atZone(ZoneId.systemDefault())
+                    .toLocalDateTime()
+            } else {
+                LocalDateTime.now()
+            }
         val placeFeedback =
             linkedMapOf<String, Any>(
                 "place_type" to state.placeType,
                 "task_type" to state.taskType,
                 "group_size" to state.groupSize,
-                "stay_duration" to stayDurationForMinutes(draft.totalFocusMinutes),
-                "time_slot" to timeSlotForHour(now.hour),
-                "day_type" to dayTypeForDayOfWeek(now.dayOfWeek),
+                "stay_duration" to stayDurationForMinutes(draft.elapsedSeconds / 60),
+                "time_slot" to timeSlotForHour(endTime.hour),
+                "day_type" to dayTypeForDayOfWeek(endTime.dayOfWeek),
                 "distance_minutes" to state.distanceMinutes.toDouble(),
                 "weather" to state.weather,
                 "indoor_outdoor" to state.indoorOutdoor,
@@ -647,7 +659,7 @@ class FeedbackSessionViewModel(
         }
 
         return CreateSessionRequest(
-            durationSec = draft.totalFocusMinutes * 60,
+            durationSec = draft.elapsedSeconds,
             avgEnvironmentScore = draft.avgEnvironmentScore.toDouble(),
             avgNoise = draft.avgNoise.toDouble(),
             avgIlluminance = draft.avgIlluminance.toDouble(),

@@ -15,6 +15,8 @@ data class SessionReportDraft(
     val placeLongitude: Double? = null,
     val placeAddress: String = "",
     val placeCategory: String = "",
+    val elapsedSeconds: Int = 0,
+    val sessionEndEpochMillis: Long = 0L,
 )
 
 object SessionReportDraftStore {
