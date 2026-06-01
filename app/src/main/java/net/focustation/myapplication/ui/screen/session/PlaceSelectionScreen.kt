@@ -327,6 +327,43 @@ fun PlaceSelectionScreen(
         }
     }
 
+    PlaceSelectionContent(
+        uiState = uiState,
+        isNaverMapMcpIdConfigured = isNaverMapMcpIdConfigured,
+        hasLocationPermission = hasLocationPermission,
+        onBack = onBack,
+        onQueryChange = viewModel::updateQuery,
+        onSearch = viewModel::searchCurrentQuery,
+        onKeyword = {
+            viewModel.updateQuery(it)
+            viewModel.searchCurrentQuery()
+        },
+        onPlaceClick = viewModel::selectPlace,
+        onSkip = {
+            SessionPlaceSelectionStore.clear()
+            onPlaceSelected()
+        },
+        onConfirm = {
+            viewModel.saveSelectedOrManualPlace()
+            onPlaceSelected()
+        },
+    )
+}
+
+@Composable
+private fun PlaceSelectionContent(
+    uiState: PlaceSelectionUiState,
+    isNaverMapMcpIdConfigured: Boolean,
+    hasLocationPermission: Boolean,
+    onBack: () -> Unit,
+    onQueryChange: (String) -> Unit,
+    onSearch: () -> Unit,
+    onKeyword: (String) -> Unit,
+    onPlaceClick: (NaverPlaceSearchResult) -> Unit,
+    onSkip: () -> Unit,
+    onConfirm: () -> Unit,
+    autoFocusSearch: Boolean = true,
+) {
     Scaffold(
         containerColor = ReferenceDesignTokens.Screen,
     ) { paddingValues ->
@@ -344,7 +381,7 @@ fun PlaceSelectionScreen(
                 currentLongitude = uiState.longitude,
                 results = uiState.results,
                 selectedPlace = uiState.selectedPlace,
-                onPlaceClick = viewModel::selectPlace,
+                onPlaceClick = onPlaceClick,
                 modifier = Modifier.fillMaxSize(),
             )
 
@@ -360,26 +397,18 @@ fun PlaceSelectionScreen(
                 PlaceSelectionHeader(onBack = onBack)
                 PlaceSearchOverlay(
                     uiState = uiState,
-                    onQueryChange = viewModel::updateQuery,
-                    onSearch = viewModel::searchCurrentQuery,
-                    onKeyword = {
-                        viewModel.updateQuery(it)
-                        viewModel.searchCurrentQuery()
-                    },
+                    onQueryChange = onQueryChange,
+                    onSearch = onSearch,
+                    onKeyword = onKeyword,
+                    autoFocus = autoFocusSearch,
                 )
             }
 
             PlaceResultsSheet(
                 uiState = uiState,
-                onPlaceClick = viewModel::selectPlace,
-                onSkip = {
-                    SessionPlaceSelectionStore.clear()
-                    onPlaceSelected()
-                },
-                onConfirm = {
-                    viewModel.saveSelectedOrManualPlace()
-                    onPlaceSelected()
-                },
+                onPlaceClick = onPlaceClick,
+                onSkip = onSkip,
+                onConfirm = onConfirm,
                 modifier =
                     Modifier
                         .align(Alignment.BottomCenter)
@@ -431,6 +460,7 @@ private fun PlaceSearchOverlay(
     onQueryChange: (String) -> Unit,
     onSearch: () -> Unit,
     onKeyword: (String) -> Unit,
+    autoFocus: Boolean = true,
 ) {
     val focusRequester = remember { FocusRequester() }
     val context = LocalContext.current
@@ -449,7 +479,8 @@ private fun PlaceSearchOverlay(
         )
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(autoFocus) {
+        if (!autoFocus) return@LaunchedEffect
         delay(KEYBOARD_SHOW_DELAY_MS)
         repeat(KEYBOARD_SHOW_ATTEMPTS) {
             requestSearchFocus()
@@ -947,6 +978,45 @@ private fun Context.hasNaverMapMcpIdConfigured(): Boolean =
 @Composable
 private fun PlaceSelectionPreview() {
     FocustationTheme {
-        PlaceSelectionScreen(onPlaceSelected = {}, onBack = {})
+        val samplePlaces =
+            listOf(
+                NaverPlaceSearchResult(
+                    name = "연남 스터디카페",
+                    category = "스터디카페",
+                    address = "서울 마포구 연남동",
+                    roadAddress = "서울 마포구 동교로 240",
+                    latitude = 37.5622,
+                    longitude = 126.9254,
+                ),
+                NaverPlaceSearchResult(
+                    name = "중앙 도서관",
+                    category = "도서관",
+                    address = "서울 서대문구 신촌동",
+                    roadAddress = "서울 서대문구 연세로 50",
+                    latitude = 37.5658,
+                    longitude = 126.9386,
+                ),
+            )
+        PlaceSelectionContent(
+            uiState =
+                PlaceSelectionUiState(
+                    query = "스터디카페",
+                    addressHint = "서울 마포구",
+                    latitude = 37.5622,
+                    longitude = 126.9254,
+                    results = samplePlaces,
+                    selectedPlace = samplePlaces.first(),
+                ),
+            isNaverMapMcpIdConfigured = false,
+            hasLocationPermission = true,
+            onBack = {},
+            onQueryChange = {},
+            onSearch = {},
+            onKeyword = {},
+            onPlaceClick = {},
+            onSkip = {},
+            onConfirm = {},
+            autoFocusSearch = false,
+        )
     }
 }
