@@ -1,6 +1,7 @@
 package net.focustation.myapplication.session
 
 import net.focustation.myapplication.data.model.FocusDataPoint
+import net.focustation.myapplication.data.repository.SensorSummaryPayload
 import net.focustation.myapplication.util.DebugLog
 
 data class SessionReportDraft(
@@ -17,6 +18,7 @@ data class SessionReportDraft(
     val placeCategory: String = "",
     val elapsedSeconds: Int = 0,
     val sessionEndEpochMillis: Long = 0L,
+    val sensorSummary: SensorSummaryPayload = SensorSummaryPayload(),
 )
 
 object SessionReportDraftStore {

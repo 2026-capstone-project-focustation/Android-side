@@ -14,6 +14,7 @@ import net.focustation.myapplication.data.model.EnvironmentSnapshot
 import net.focustation.myapplication.data.model.FocusDataPoint
 import net.focustation.myapplication.data.repository.CreateSessionRequest
 import net.focustation.myapplication.data.repository.FirestoreStudyRepository
+import net.focustation.myapplication.data.repository.FirestoreSurveyRepository
 import net.focustation.myapplication.data.repository.PlaceSnapshotPayload
 import net.focustation.myapplication.data.repository.SavedPlaceRequest
 import net.focustation.myapplication.data.repository.SessionApiRepository
@@ -24,6 +25,7 @@ import net.focustation.myapplication.sensor.VibrationSensorManager
 import net.focustation.myapplication.session.SessionPlaceSelectionStore
 import net.focustation.myapplication.session.SessionReportDraft
 import net.focustation.myapplication.session.SessionReportDraftStore
+import net.focustation.myapplication.survey.SurveyResponseStore
 import net.focustation.myapplication.ui.screen.survey.placeRatingQuestions
 import net.focustation.myapplication.util.DebugLog
 import java.time.Instant
@@ -259,6 +261,10 @@ class FocusSessionViewModel(
     private var vibrationSum = 0.0
     private var vibrationCount = 0
 
+    private val lightSamples = mutableListOf<Float>()
+    private val noiseSamples = mutableListOf<Double>()
+    private val vibrationSamples = mutableListOf<Double>()
+
     companion object {
         private const val WINDOW = 30
     }
@@ -271,6 +277,7 @@ class FocusSessionViewModel(
                 if (_uiState.value.isRunning) {
                     lightSum += lux
                     lightCount += 1
+                    lightSamples += lux
                 }
                 recalculate()
             }
@@ -282,6 +289,7 @@ class FocusSessionViewModel(
                 if (_uiState.value.isRunning) {
                     vibrationSum += m
                     vibrationCount += 1
+                    vibrationSamples += m
                 }
                 recalculate()
             }
@@ -306,6 +314,7 @@ class FocusSessionViewModel(
                     if (_uiState.value.isRunning) {
                         noiseSum += db
                         noiseCount += 1
+                        noiseSamples += db
                     }
                     recalculate()
                 }
@@ -409,6 +418,13 @@ class FocusSessionViewModel(
         val avgNoise = if (noiseCount > 0) (noiseSum / noiseCount).toFloat() else 0f
         val avgIlluminance = if (lightCount > 0) (lightSum / lightCount).toFloat() else 0f
         val avgVibration = if (vibrationCount > 0) vibrationSum / vibrationCount else 0.0
+        val sensorSummary =
+            buildSensorSummaryPayload(
+                noiseSamples = noiseSamples.toList(),
+                lightSamples = lightSamples.toList(),
+                vibrationSamples = vibrationSamples.toList(),
+                measurementDurationSec = state.elapsedSeconds,
+            )
         val selectedPlace = SessionPlaceSelectionStore.consume()
 
         DebugLog.d(
@@ -439,6 +455,7 @@ class FocusSessionViewModel(
                 placeCategory = selectedPlace?.category.orEmpty(),
                 elapsedSeconds = state.elapsedSeconds,
                 sessionEndEpochMillis = System.currentTimeMillis(),
+                sensorSummary = sensorSummary,
             ),
         )
         DebugLog.d("[집중세션][종료] draft 저장 완료")
@@ -457,6 +474,9 @@ class FocusSessionViewModel(
         noiseCount = 0
         vibrationSum = 0.0
         vibrationCount = 0
+        lightSamples.clear()
+        noiseSamples.clear()
+        vibrationSamples.clear()
     }
 
     private fun buildFocusTimeline(
@@ -527,6 +547,7 @@ private val defaultPlaceFeedbackRatings: Map<String, Int> = placeRatingQuestions
 class FeedbackSessionViewModel(
     private val sessionApi: SessionApiRepository = SessionApiRepository(),
     private val studyRepository: FirestoreStudyRepository = FirestoreStudyRepository(),
+    private val surveyRepository: FirestoreSurveyRepository = FirestoreSurveyRepository(),
 ) : androidx.lifecycle.ViewModel() {
     private val _uiState = MutableStateFlow(seedInitialState())
     val uiState: StateFlow<FeedbackUiState> = _uiState.asStateFlow()
@@ -592,7 +613,8 @@ class FeedbackSessionViewModel(
 
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true, saveErrorMessage = null) }
-            val request = buildRequest(draft, _uiState.value)
+            val surveyModelInput = loadSurveyModelInput()
+            val request = buildRequest(draft, _uiState.value, surveyModelInput)
             val result = sessionApi.createSession(request)
             val created = result.getOrNull()
             if (created != null) {
@@ -616,6 +638,15 @@ class FeedbackSessionViewModel(
         }
     }
 
+    private suspend fun loadSurveyModelInput(): Map<String, Any> {
+        val cached = SurveyResponseStore.latest()?.modelInput
+        if (!cached.isNullOrEmpty()) return cached
+
+        return surveyRepository
+            .loadLatestModelInput()
+            .getOrElse { emptyMap() }
+    }
+
     private suspend fun persistPlaceIfNeeded(draft: SessionReportDraft) {
         val name = draft.placeName.trim()
         val lat = draft.placeLatitude
@@ -631,6 +662,7 @@ class FeedbackSessionViewModel(
     private fun buildRequest(
         draft: SessionReportDraft,
         state: FeedbackUiState,
+        surveyModelInput: Map<String, Any>,
     ): CreateSessionRequest {
         val endTime =
             if (draft.sessionEndEpochMillis > 0L) {
@@ -657,6 +689,12 @@ class FeedbackSessionViewModel(
         placeRatingQuestions.forEach { question ->
             placeFeedback[question.key] = state.placeRatings[question.key] ?: 3
         }
+        val modelInput =
+            buildSensorTargetV2ModelInput(
+                surveyModelInput = surveyModelInput,
+                placeFeedback = placeFeedback,
+                sensorSummary = draft.sensorSummary,
+            )
 
         return CreateSessionRequest(
             durationSec = draft.elapsedSeconds,
@@ -674,6 +712,8 @@ class FeedbackSessionViewModel(
                     category = draft.placeCategory.ifBlank { null },
                 ),
             placeFeedback = placeFeedback,
+            sensorSummary = draft.sensorSummary,
+            modelInput = modelInput,
         )
     }
 }

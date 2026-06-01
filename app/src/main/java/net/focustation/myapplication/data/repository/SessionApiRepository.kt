@@ -14,6 +14,26 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URI
 
+data class SensorSummaryPayload(
+    val noiseMeanDb: Double = 0.0,
+    val noiseStdDb: Double = 0.0,
+    val noiseMaxDb: Double = 0.0,
+    val noiseP90Db: Double = 0.0,
+    val noiseSpikeCount: Int = 0,
+    val lightMeanLux: Double = 0.0,
+    val lightStdLux: Double = 0.0,
+    val lightMinLux: Double = 0.0,
+    val lightMaxLux: Double = 0.0,
+    val vibrationMean: Double = 0.0,
+    val vibrationStd: Double = 0.0,
+    val vibrationMax: Double = 0.0,
+    val vibrationP95: Double = 0.0,
+    val vibrationSpikeCount: Int = 0,
+    val measurementDurationSec: Int = 0,
+    val validSampleRatio: Double? = null,
+    val phoneMovementRatio: Double? = null,
+)
+
 data class PlaceSnapshotPayload(
     val name: String,
     val latitude: Double?,
@@ -34,6 +54,8 @@ data class CreateSessionRequest(
     val placeSnapshot: PlaceSnapshotPayload,
     // context 10 + place 10 = 20개, snake_case. 라벨은 현재 계약에 없으므로 포함하지 않는다.
     val placeFeedback: Map<String, Any>,
+    val sensorSummary: SensorSummaryPayload = SensorSummaryPayload(),
+    val modelInput: Map<String, Any> = emptyMap(),
 )
 
 data class CreateSessionResult(
@@ -43,7 +65,7 @@ data class CreateSessionResult(
 
 /**
  * Firebase Functions `POST /sessions` 클라이언트.
- * Functions가 설문 프로필(27)과 합쳐 ML 50 입력을 구성하고 Firestore에 세션 문서를 생성한다.
+ * Android가 v2 `modelInput`을 함께 보내고, Functions가 ML 호출과 Firestore 세션 문서 생성을 담당한다.
  * Android는 세션을 Firestore에 직접 쓰지 않는다.
  */
 class SessionApiRepository(
@@ -100,7 +122,7 @@ class SessionApiRepository(
                     }
                     CreateSessionResult(
                         sessionId = sessionId,
-                        mlScore = json.optDouble("mlScore", -1.0),
+                        mlScore = json.optPredictionScore(),
                     )
                 } finally {
                     connection.disconnect()
@@ -167,5 +189,56 @@ class SessionApiRepository(
             .put("focusTimeline", timelineArray)
             .put("placeSnapshot", snapshotJson)
             .put("placeFeedback", feedbackJson)
+            .put("sensorSummary", sensorSummary.toJson())
+            .put("modelInput", modelInput.toJsonObject())
+    }
+
+    private fun SensorSummaryPayload.toJson(): JSONObject =
+        JSONObject()
+            .put("noise_mean_db", noiseMeanDb)
+            .put("noise_std_db", noiseStdDb)
+            .put("noise_max_db", noiseMaxDb)
+            .put("noise_p90_db", noiseP90Db)
+            .put("noise_spike_count", noiseSpikeCount)
+            .put("light_mean_lux", lightMeanLux)
+            .put("light_std_lux", lightStdLux)
+            .put("light_min_lux", lightMinLux)
+            .put("light_max_lux", lightMaxLux)
+            .put("vibration_mean", vibrationMean)
+            .put("vibration_std", vibrationStd)
+            .put("vibration_max", vibrationMax)
+            .put("vibration_p95", vibrationP95)
+            .put("vibration_spike_count", vibrationSpikeCount)
+            .put("measurement_duration_sec", measurementDurationSec)
+            .also { json ->
+                validSampleRatio?.let { json.put("valid_sample_ratio", it) }
+                phoneMovementRatio?.let { json.put("phone_movement_ratio", it) }
+            }
+
+    private fun Map<String, Any>.toJsonObject(): JSONObject {
+        val json = JSONObject()
+        forEach { (key, value) ->
+            when (value) {
+                is Float -> json.put(key, value.toDouble())
+                is Number -> json.put(key, value)
+                is Boolean -> json.put(key, value)
+                else -> json.put(key, value.toString())
+            }
+        }
+        return json
+    }
+
+    private fun JSONObject.optPredictionScore(): Double {
+        if (has("mlScore")) return optDouble("mlScore", -1.0)
+        if (has("predicted_satisfaction_score_sensor_v2")) {
+            return optDouble("predicted_satisfaction_score_sensor_v2", -1.0)
+        }
+
+        val prediction = optJSONObject("prediction")
+        if (prediction != null && prediction.has("predicted_satisfaction_score_sensor_v2")) {
+            return prediction.optDouble("predicted_satisfaction_score_sensor_v2", -1.0)
+        }
+
+        return -1.0
     }
 }

@@ -55,9 +55,42 @@ class FirestoreSurveyRepository(
             DebugLog.e("[Firestore][설문저장][실패] ${error.message}", error)
         }
 
+    suspend fun loadLatestModelInput(): Result<Map<String, Any>> =
+        runCatching {
+            val uid = auth.currentUser?.uid ?: error("로그인 후 설문을 불러올 수 있어요.")
+            val snapshot =
+                firestore
+                    .collection("users")
+                    .document(uid)
+                    .collection("surveyResponses")
+                    .document("latest")
+                    .get()
+                    .await()
+
+            val modelInput = snapshot.get("modelInput") as? Map<*, *> ?: emptyMap<Any, Any>()
+            modelInput.toStringKeyPayload()
+        }.onFailure { error ->
+            if (error is CancellationException) throw error
+            DebugLog.e("[Firestore][설문불러오기][실패] ${error.message}", error)
+        }
+
     private fun generateResponseId(): String = "survey_${System.currentTimeMillis()}"
 
     private fun uidForLog(uid: String): String = if (uid.length <= 6) uid else "${uid.take(6)}..."
+
+    private fun Map<*, *>.toStringKeyPayload(): Map<String, Any> =
+        mapNotNull { (key, value) ->
+            val safeKey = key as? String ?: return@mapNotNull null
+            val safeValue =
+                when (value) {
+                    is String -> value
+                    is Number -> value
+                    is Boolean -> value
+                    else -> null
+                } ?: return@mapNotNull null
+
+            safeKey to safeValue
+        }.toMap()
 
     private companion object {
         private const val SURVEY_SCHEMA_VERSION = 2
