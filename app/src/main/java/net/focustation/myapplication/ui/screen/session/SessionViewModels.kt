@@ -41,7 +41,7 @@ data class EnvironmentSessionUiState(
     val noiseHistory: List<Float> = emptyList(),
     val lightHistory: List<Float> = emptyList(),
     val vibrationHistory: List<Float> = emptyList(),
-    val currentSnapshot: EnvironmentSnapshot = EnvironmentSnapshot(),
+    val currentSnapshot: EnvironmentSnapshot = emptyEnvironmentSnapshot(),
 )
 
 class EnvironmentSessionViewModel(
@@ -71,6 +71,7 @@ class EnvironmentSessionViewModel(
     init {
         viewModelScope.launch {
             lightManager.getLightFlow().collect { lux ->
+                if (!_uiState.value.isRunning) return@collect
                 lightBuf.addLast(lux)
                 if (lightBuf.size > WINDOW) lightBuf.removeFirst()
                 recalculate()
@@ -78,6 +79,7 @@ class EnvironmentSessionViewModel(
         }
         viewModelScope.launch {
             vibrationManager.getVibrationFlow().collect { m ->
+                if (!_uiState.value.isRunning) return@collect
                 vibBuf.addLast(m)
                 if (vibBuf.size > WINDOW) vibBuf.removeFirst()
                 recalculate()
@@ -99,6 +101,7 @@ class EnvironmentSessionViewModel(
         noiseJob =
             viewModelScope.launch {
                 noiseManager.getNoiseFlow().collect { db ->
+                    if (!_uiState.value.isRunning) return@collect
                     noiseBuf.addLast(db)
                     if (noiseBuf.size > WINDOW) noiseBuf.removeFirst()
                     recalculate()
@@ -151,7 +154,7 @@ class EnvironmentSessionViewModel(
                     noiseHistory = emptyList(),
                     lightHistory = emptyList(),
                     vibrationHistory = emptyList(),
-                    currentSnapshot = EnvironmentSnapshot(),
+                    currentSnapshot = emptyEnvironmentSnapshot(),
                 )
             }
         } else {
@@ -267,25 +270,23 @@ class FocusSessionViewModel(
     init {
         viewModelScope.launch {
             lightManager.getLightFlow().collect { lux ->
+                if (!_uiState.value.isRunning) return@collect
                 lightBuf.addLast(lux)
                 if (lightBuf.size > WINDOW) lightBuf.removeFirst()
-                if (_uiState.value.isRunning) {
-                    lightSum += lux
-                    lightCount += 1
-                    lightSamples += lux
-                }
+                lightSum += lux
+                lightCount += 1
+                lightSamples += lux
                 updateSensorSnapshot()
             }
         }
         viewModelScope.launch {
             vibrationManager.getVibrationFlow().collect { m ->
+                if (!_uiState.value.isRunning) return@collect
                 vibBuf.addLast(m)
                 if (vibBuf.size > WINDOW) vibBuf.removeFirst()
-                if (_uiState.value.isRunning) {
-                    vibrationSum += m
-                    vibrationCount += 1
-                    vibrationSamples += m
-                }
+                vibrationSum += m
+                vibrationCount += 1
+                vibrationSamples += m
                 updateSensorSnapshot()
             }
         }
@@ -304,13 +305,12 @@ class FocusSessionViewModel(
         noiseJob =
             viewModelScope.launch {
                 noiseManager.getNoiseFlow().collect { db ->
+                    if (!_uiState.value.isRunning) return@collect
                     noiseBuf.addLast(db)
                     if (noiseBuf.size > WINDOW) noiseBuf.removeFirst()
-                    if (_uiState.value.isRunning) {
-                        noiseSum += db
-                        noiseCount += 1
-                        noiseSamples += db
-                    }
+                    noiseSum += db
+                    noiseCount += 1
+                    noiseSamples += db
                     updateSensorSnapshot()
                 }
             }
@@ -516,6 +516,13 @@ class FocusSessionViewModel(
         noiseJob?.cancel()
     }
 }
+
+private fun emptyEnvironmentSnapshot(): EnvironmentSnapshot =
+    EnvironmentSnapshot(
+        noiseLevel = 0f,
+        illuminance = 0f,
+        vibration = 0.0,
+    )
 
 // ─── 피드백 세션 ──────────────────────────────────────────────────────────────
 

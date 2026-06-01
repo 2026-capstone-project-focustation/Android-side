@@ -63,6 +63,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import net.focustation.myapplication.score.ScoreCalculator
 import net.focustation.myapplication.ui.components.MiniLineGraph
 import net.focustation.myapplication.ui.components.ReferenceDesignTokens
 import net.focustation.myapplication.ui.theme.ColorLight
@@ -190,9 +191,20 @@ private fun EnvironmentSessionContent(
                 illuminance = uiState.currentSnapshot.illuminance,
                 vibration = uiState.currentSnapshot.vibration,
             )
+            if (uiState.isCompleted) {
+                EnvironmentScoreCard(
+                    score =
+                        calculateEnvironmentScore(
+                            noise = uiState.currentSnapshot.noiseLevel,
+                            illuminance = uiState.currentSnapshot.illuminance,
+                            vibration = uiState.currentSnapshot.vibration,
+                        ),
+                )
+            }
             EnvironmentSensorGraphCard(
                 title = "소음 추이",
                 history = uiState.noiseHistory,
+                statusText = sensorGraphStatusLabel(uiState),
                 lineColor = ColorNoise,
                 minValue = 20f,
                 maxValue = 90f,
@@ -200,6 +212,7 @@ private fun EnvironmentSessionContent(
             EnvironmentSensorGraphCard(
                 title = "조도 추이",
                 history = uiState.lightHistory,
+                statusText = sensorGraphStatusLabel(uiState),
                 lineColor = ColorLight,
                 minValue = 0f,
                 maxValue = 1000f,
@@ -207,6 +220,7 @@ private fun EnvironmentSessionContent(
             EnvironmentSensorGraphCard(
                 title = "진동 추이",
                 history = uiState.vibrationHistory,
+                statusText = sensorGraphStatusLabel(uiState),
                 lineColor = ColorVibration,
                 minValue = 0f,
                 maxValue = 0.2f,
@@ -409,6 +423,49 @@ private fun EnvironmentMetricGrid(
 }
 
 @Composable
+private fun EnvironmentScoreCard(score: Int) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = ReferenceDesignTokens.Blue,
+        shadowElevation = 0.dp,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Box(
+                modifier =
+                    Modifier
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.18f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = score.toString(),
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black),
+                )
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(
+                    text = "현재 공간 적합도",
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
+                )
+                Text(
+                    text = environmentScoreLabel(score),
+                    color = Color.White.copy(alpha = 0.76f),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun EnvironmentMetricCard(
     label: String,
     value: String,
@@ -474,6 +531,7 @@ private fun EnvironmentMetricCard(
 private fun EnvironmentSensorGraphCard(
     title: String,
     history: List<Float>,
+    statusText: String,
     lineColor: Color,
     minValue: Float,
     maxValue: Float,
@@ -501,16 +559,11 @@ private fun EnvironmentSensorGraphCard(
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
                     )
                     Text(
-                        text = "측정 중 실시간으로 업데이트돼요",
+                        text = statusText,
                         color = ReferenceDesignTokens.TextSecondary,
                         style = MaterialTheme.typography.labelSmall,
                     )
                 }
-                Text(
-                    text = "${history.size}개",
-                    color = ReferenceDesignTokens.Blue,
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                )
             }
             if (history.size >= 2) {
                 MiniLineGraph(
@@ -691,6 +744,46 @@ private fun environmentStatusLabel(
         isRunning -> "측정 중"
         isPaused -> "일시정지"
         else -> "대기 중"
+    }
+
+private fun sensorGraphStatusLabel(uiState: EnvironmentSessionUiState): String =
+    when {
+        uiState.isCompleted -> "측정이 완료되어 마지막 값으로 고정됐어요"
+        uiState.isRunning -> "측정 중 실시간으로 업데이트돼요"
+        uiState.isPaused -> "일시정지 중에는 그래프가 멈춰요"
+        else -> "측정을 시작하면 그래프가 표시돼요"
+    }
+
+private fun calculateEnvironmentScore(
+    noise: Float,
+    illuminance: Float,
+    vibration: Double,
+): Int {
+    val scores =
+        listOfNotNull(
+            illuminance
+                .takeIf { it > 0f }
+                ?.let { ScoreCalculator.calculateLightScore(listOf(it)) },
+            noise
+                .takeIf { it > 0f }
+                ?.let { ScoreCalculator.calculateNoiseScore(listOf(it.toDouble())) },
+            vibration
+                .takeIf { it > 0.0 }
+                ?.let { ScoreCalculator.calculateVibrationScore(listOf(it)) },
+        )
+
+    return ScoreCalculator
+        .calculateTotalScore(scores)
+        .toInt()
+        .coerceIn(0, 100)
+}
+
+private fun environmentScoreLabel(score: Int): String =
+    when {
+        score >= 80 -> "집중하기 좋은 환경이에요"
+        score >= 60 -> "무난한 집중 환경이에요"
+        score > 0 -> "집중 전 조정이 필요해요"
+        else -> "유효한 측정값이 부족해요"
     }
 
 private fun formatRemainingTime(seconds: Int): String {
