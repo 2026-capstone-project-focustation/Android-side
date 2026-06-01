@@ -190,6 +190,7 @@ fun AppNavGraph(navController: NavHostController) {
             SessionReportDetailScreen(
                 sessionId = sessionId,
                 onBack = { navController.popBackStack() },
+                onDeleted = { navController.popBackStack() },
             )
         }
 

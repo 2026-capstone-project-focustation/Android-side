@@ -22,10 +22,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.Assessment
 import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -37,11 +39,14 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -80,6 +85,7 @@ fun SessionReportScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    var pendingDeleteItem by remember { mutableStateOf<StudyHistoryUiItem?>(null) }
 
     LaunchedEffect(Unit) {
         viewModel.onScreenEntered()
@@ -216,6 +222,7 @@ fun SessionReportScreen(
                                     item = historyItem,
                                     isDeleting = uiState.deletingSessionIds.contains(historyItem.sessionId),
                                     onClick = { onHistoryItemClick(historyItem.sessionId) },
+                                    onDeleteClick = { pendingDeleteItem = historyItem },
                                 )
                             }
                         }
@@ -223,6 +230,29 @@ fun SessionReportScreen(
                 }
             }
         }
+    }
+
+    pendingDeleteItem?.let { item ->
+        AlertDialog(
+            onDismissRequest = { pendingDeleteItem = null },
+            title = { Text("리포트 삭제") },
+            text = { Text("이 세션 리포트를 삭제할까요? 삭제한 기록은 Firestore에서 바로 제거됩니다.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingDeleteItem = null
+                        viewModel.hideHistoryItem(item.sessionId)
+                    },
+                ) {
+                    Text("삭제")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDeleteItem = null }) {
+                    Text("취소")
+                }
+            },
+        )
     }
 }
 
@@ -356,6 +386,7 @@ private fun SessionReportCard(
     item: StudyHistoryUiItem,
     isDeleting: Boolean,
     onClick: () -> Unit,
+    onDeleteClick: () -> Unit,
 ) {
     Surface(
         modifier =
@@ -398,20 +429,38 @@ private fun SessionReportCard(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Box(
-                modifier =
-                    Modifier
-                        .size(34.dp)
-                        .clip(CircleShape)
-                        .background(ReferenceDesignTokens.PaleBlueTrack),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    contentDescription = "상세 보기",
-                    tint = FocusInk,
-                    modifier = Modifier.size(20.dp),
-                )
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                IconButton(
+                    onClick = onDeleteClick,
+                    enabled = !isDeleting,
+                    modifier =
+                        Modifier
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFFFECEC)),
+                ) {
+                    Icon(
+                        Icons.Outlined.Delete,
+                        contentDescription = "리포트 삭제",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+                Box(
+                    modifier =
+                        Modifier
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .background(ReferenceDesignTokens.PaleBlueTrack),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = "상세 보기",
+                        tint = FocusInk,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
             }
         }
     }
