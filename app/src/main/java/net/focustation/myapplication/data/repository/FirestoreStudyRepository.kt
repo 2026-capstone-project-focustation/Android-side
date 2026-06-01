@@ -223,8 +223,6 @@ class FirestoreStudyRepository(
         }
     }
 
-    private fun generateSessionId(): String = "${System.currentTimeMillis()}-${(1000..9999).random()}"
-
     private fun buildStablePlaceId(request: SavedPlaceRequest): String {
         val normalizedName = request.name.trim().lowercase(Locale.ROOT)
         val lat = request.latitude?.let { "%.4f".format(Locale.ROOT, it) } ?: "na"

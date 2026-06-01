@@ -362,7 +362,6 @@ private fun rememberSurveyPages(viewModel: SurveyViewModel): List<SurveyPage> =
             preferenceQuestions.forEach { question ->
                 addLikertPage(
                     section = "선호 환경",
-                    key = question.key,
                     title = question.displayTitle(),
                     subtitle = "나에게 얼마나 중요한지 선택해주세요.",
                     icon = Icons.Outlined.Insights,
@@ -403,7 +402,6 @@ private fun MutableList<SurveyPage>.addSingleChoicePage(
 
 private fun MutableList<SurveyPage>.addLikertPage(
     section: String,
-    key: String,
     title: String,
     subtitle: String,
     icon: ImageVector,
@@ -419,8 +417,8 @@ private fun MutableList<SurveyPage>.addLikertPage(
         ) { state, goNext ->
             LikertChoiceQuestion(
                 score = score(state),
-                lowLabel = key.likertLowLabel(),
-                highLabel = key.likertHighLabel(),
+                lowLabel = LIKERT_LOW_LABEL,
+                highLabel = LIKERT_HIGH_LABEL,
                 onScoreChange = {
                     onScoreChange(it)
                     goNext()
@@ -598,9 +596,9 @@ private fun LikertQuestion.displayTitle(): String =
         else -> title
     }
 
-private fun String.likertLowLabel(): String = "낮음"
+private const val LIKERT_LOW_LABEL = "낮음"
 
-private fun String.likertHighLabel(): String = "높음"
+private const val LIKERT_HIGH_LABEL = "높음"
 
 @Preview(showBackground = true)
 @Composable

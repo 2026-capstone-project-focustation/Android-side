@@ -58,4 +58,11 @@ class SessionFeedbackDerivationsTest {
         assertEquals("indoor", indoorOutdoorForPlaceType("cafe"))
         assertEquals("indoor", indoorOutdoorForPlaceType("library"))
     }
+
+    @Test
+    fun `범위 밖 입력을 안전한 기본값으로 처리한다`() {
+        assertEquals("late_night", timeSlotForHour(-1))
+        assertEquals("late_night", timeSlotForHour(24))
+        assertEquals("under_1h", stayDurationForMinutes(-10))
+    }
 }

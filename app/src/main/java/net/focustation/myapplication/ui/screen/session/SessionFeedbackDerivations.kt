@@ -8,6 +8,7 @@ import java.time.DayOfWeek
 
 internal fun timeSlotForHour(hour: Int): String =
     when (hour) {
+        !in 0..23 -> "late_night"
         in 0..5 -> "early_morning"
         in 6..11 -> "morning"
         in 12..17 -> "afternoon"

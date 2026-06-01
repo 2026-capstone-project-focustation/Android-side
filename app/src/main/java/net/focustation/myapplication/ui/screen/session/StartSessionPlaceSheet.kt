@@ -56,6 +56,7 @@ import net.focustation.myapplication.ui.components.ReferenceDesignTokens
 data class StartSessionPlaceUiState(
     val isLoading: Boolean = true,
     val recentPlaces: List<SavedPlaceRecord> = emptyList(),
+    val loadFailed: Boolean = false,
 )
 
 class StartSessionPlaceViewModel(
@@ -70,8 +71,13 @@ class StartSessionPlaceViewModel(
 
     private fun loadRecentPlaces() {
         viewModelScope.launch {
-            val places = repository.getSavedPlaces(RECENT_LIMIT).getOrNull().orEmpty()
-            _uiState.value = StartSessionPlaceUiState(isLoading = false, recentPlaces = places)
+            val result = repository.getSavedPlaces(RECENT_LIMIT)
+            _uiState.value =
+                StartSessionPlaceUiState(
+                    isLoading = false,
+                    recentPlaces = result.getOrNull().orEmpty(),
+                    loadFailed = result.isFailure,
+                )
         }
     }
 
@@ -136,6 +142,9 @@ fun StartSessionPlaceSheet(
                         ) {
                             CircularProgressIndicator(strokeWidth = 2.dp)
                         }
+
+                    uiState.loadFailed ->
+                        LoadFailedHint()
 
                     uiState.recentPlaces.isEmpty() ->
                         EmptyRecentHint()
@@ -246,6 +255,23 @@ private fun EmptyRecentHint() {
     ) {
         Text(
             text = "아직 저장된 공간이 없어요.\n‘직접 선택할래요’로 오늘의 공간을 찾아보세요.",
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 18.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = ReferenceDesignTokens.TextSecondary,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+@Composable
+private fun LoadFailedHint() {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = ReferenceDesignTokens.PaleBlueTrack,
+    ) {
+        Text(
+            text = "최근 공간을 불러오지 못했어요.\n‘직접 선택할래요’로 오늘의 공간을 찾아보세요.",
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 18.dp),
             style = MaterialTheme.typography.bodyMedium,
             color = ReferenceDesignTokens.TextSecondary,

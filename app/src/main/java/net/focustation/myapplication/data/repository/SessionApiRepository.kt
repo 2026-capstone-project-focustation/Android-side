@@ -94,8 +94,12 @@ class SessionApiRepository(
                     }
 
                     val json = JSONObject(responseBody)
+                    val sessionId = json.optString("sessionId")
+                    if (sessionId.isBlank()) {
+                        throw IOException("서버에서 유효한 sessionId를 받지 못했어요.")
+                    }
                     CreateSessionResult(
-                        sessionId = json.optString("sessionId"),
+                        sessionId = sessionId,
                         mlScore = json.optDouble("mlScore", -1.0),
                     )
                 } finally {
