@@ -117,7 +117,7 @@ fun SessionReportDetailScreen(
         AlertDialog(
             onDismissRequest = { if (!isDeleting) showDeleteDialog = false },
             title = { Text("리포트 삭제") },
-            text = { Text("이 세션 리포트를 삭제할까요? 삭제한 기록은 Firestore에서 바로 제거됩니다.") },
+            text = { Text("이 세션 리포트를 삭제할까요? 삭제한 기록은 영구 삭제됩니다.") },
             confirmButton = {
                 TextButton(
                     enabled = !isDeleting,
