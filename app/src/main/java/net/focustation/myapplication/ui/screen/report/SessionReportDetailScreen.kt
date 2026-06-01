@@ -45,7 +45,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import net.focustation.myapplication.data.model.FocusDataPoint
+import net.focustation.myapplication.data.model.SensorTimelinePoint
+import net.focustation.myapplication.data.model.SensorTimelines
 import net.focustation.myapplication.data.repository.FirestoreStudyRepository
 import net.focustation.myapplication.data.repository.StudySessionRecord
 import net.focustation.myapplication.ui.components.MiniLineGraph
@@ -76,7 +77,7 @@ fun SessionReportDetailScreen(
         val result = repository.getStudySessionById(sessionId)
         result.fold(
             onSuccess = {
-                DebugLog.d("[리포트상세][조회] 성공 sessionId=${it.sessionId}, 타임라인=${it.focusTimeline.size}개")
+                DebugLog.d("[리포트상세][조회] 성공 sessionId=${it.sessionId}, 센서추이=${it.sensorTimelines.totalCount()}개")
                 record = it
                 errorMessage = null
                 isLoading = false
@@ -141,7 +142,7 @@ private fun SessionReportDetailContent(
 
                 record != null -> {
                     SessionDetailHero(session = record)
-                    FocusTimelineCard(session = record)
+                    SensorTimelineSection(session = record)
                     EnvironmentAnalysisGrid(session = record)
                     SessionMetaSection(session = record)
                 }
@@ -226,7 +227,7 @@ private fun SessionDetailHero(session: StudySessionRecord) {
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        text = session.displayScore().toString(),
+                        text = session.displayMlScore()?.toString() ?: "--",
                         color = ReferenceDesignTokens.TextPrimary,
                         style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
                     )
@@ -235,8 +236,8 @@ private fun SessionDetailHero(session: StudySessionRecord) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 HeroMetric("집중 시간", "${(session.durationSec / 60).coerceAtLeast(1)}분", Modifier.weight(1f))
                 HeroMetric(
-                    if (session.validMlScore == null) "집중 점수" else "ML 적합도",
-                    "${session.displayScore()}점",
+                    "ML 적합도",
+                    session.displayMlScore()?.let { "${it}점" } ?: "대기",
                     Modifier.weight(1f),
                 )
             }
@@ -267,7 +268,59 @@ private fun HeroMetric(
 }
 
 @Composable
-private fun FocusTimelineCard(session: StudySessionRecord) {
+private fun SensorTimelineSection(session: StudySessionRecord) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        SensorTimelineCard(
+            title = "소음 추이",
+            valueText = "${session.avgNoise.toInt()} dB",
+            points = session.sensorTimelines.noise,
+            fallbackValue = session.avgNoise,
+            minValue = 20f,
+            maxValue = 90f,
+            lineColor = ColorNoise,
+        )
+        SensorTimelineCard(
+            title = "조도 추이",
+            valueText = "${session.avgIlluminance.toInt()} lux",
+            points = session.sensorTimelines.light,
+            fallbackValue = session.avgIlluminance,
+            minValue = 0f,
+            maxValue = 1000f,
+            lineColor = ColorLight,
+        )
+        SensorTimelineCard(
+            title = "진동 추이",
+            valueText = String.format(Locale.getDefault(), "%.3f", session.avgVibration),
+            points = session.sensorTimelines.vibration,
+            fallbackValue = session.avgVibration.toFloat(),
+            minValue = 0f,
+            maxValue = 0.2f,
+            lineColor = ColorVibration,
+        )
+    }
+}
+
+@Composable
+private fun SensorTimelineCard(
+    title: String,
+    valueText: String,
+    points: List<SensorTimelinePoint>,
+    fallbackValue: Float,
+    minValue: Float,
+    maxValue: Float,
+    lineColor: Color,
+) {
+    val graphPoints =
+        if (points.size >= 2) {
+            points
+        } else {
+            listOf(
+                SensorTimelinePoint("기록", fallbackValue.coerceAtLeast(0f)),
+                SensorTimelinePoint("평균", fallbackValue.coerceAtLeast(0f)),
+            )
+        }
+    val statusText = if (points.size >= 2) "${points.size}개 지점" else "저장된 추이 없음 · 평균값 표시"
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(ReferenceDesignTokens.LargeRadius),
@@ -278,41 +331,52 @@ private fun FocusTimelineCard(session: StudySessionRecord) {
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 15.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(
-                text = "집중 점수 추이",
-                color = ReferenceDesignTokens.TextPrimary,
-                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-            )
-
-            val timeline = session.focusTimeline
-            if (timeline.size >= 2) {
-                MiniLineGraph(
-                    dataPoints = timeline.map { it.focusScore },
-                    minValue = 0f,
-                    maxValue = 100f,
-                    lineColor = ReferenceDesignTokens.Blue,
-                    modifier = Modifier.fillMaxWidth().height(132.dp),
-                )
-                Row(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
                     Text(
-                        text = timeline.first().timeLabel,
-                        color = ReferenceDesignTokens.TextSecondary,
-                        style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.weight(1f),
+                        text = title,
+                        color = ReferenceDesignTokens.TextPrimary,
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                     )
                     Text(
-                        text = timeline.last().timeLabel,
+                        text = statusText,
                         color = ReferenceDesignTokens.TextSecondary,
                         style = MaterialTheme.typography.labelSmall,
-                        textAlign = TextAlign.End,
-                        modifier = Modifier.weight(1f),
                     )
                 }
-            } else {
                 Text(
-                    text = "그래프로 보여줄 타임라인 데이터가 부족해요.",
+                    text = valueText,
+                    color = lineColor,
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                )
+            }
+
+            MiniLineGraph(
+                dataPoints = graphPoints.map { it.value },
+                minValue = minValue,
+                maxValue = maxValue,
+                lineColor = lineColor,
+                modifier = Modifier.fillMaxWidth().height(112.dp),
+            )
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = graphPoints.first().timeLabel,
                     color = ReferenceDesignTokens.TextSecondary,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = graphPoints.last().timeLabel,
+                    color = ReferenceDesignTokens.TextSecondary,
+                    style = MaterialTheme.typography.labelSmall,
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.weight(1f),
                 )
             }
         }
@@ -351,11 +415,9 @@ private fun EnvironmentAnalysisGrid(session: StudySessionRecord) {
             )
             AnalysisMetricCard(
                 icon = Icons.Outlined.Schedule,
-                label = if (session.validMlScore == null) "세션 길이" else "ML 적합도",
-                value =
-                    session.validMlScore?.let { "${it.toInt()}점" }
-                        ?: "${(session.durationSec / 60).coerceAtLeast(1)}분",
-                status = if (session.validMlScore == null) "기록됨" else "ML 추론",
+                label = "ML 적합도",
+                value = session.displayMlScore()?.let { "${it}점" } ?: "--",
+                status = if (session.validMlScore == null) "미생성" else "ML 추론",
                 tint = ReferenceDesignTokens.Blue,
                 modifier = Modifier.weight(1f),
             )
@@ -479,7 +541,9 @@ private fun vibrationStatus(vibration: Double): String =
 private val StudySessionRecord.validMlScore: Double?
     get() = mlScore?.takeIf { it >= 0.0 }
 
-private fun StudySessionRecord.displayScore(): Int = (validMlScore?.toInt() ?: focusScoreAvg.toInt()).coerceIn(0, 100)
+private fun StudySessionRecord.displayMlScore(): Int? = validMlScore?.toInt()?.coerceIn(0, 100)
+
+private fun SensorTimelines.totalCount(): Int = noise.size + light.size + vibration.size
 
 private fun formatDate(epochMillis: Long): String {
     if (epochMillis <= 0L) return "날짜 미상"
@@ -511,14 +575,37 @@ private fun sampleStudySessionRecord(): StudySessionRecord =
         avgVibration = 0.032,
         placeName = "중앙 도서관 3층",
         mlScore = 86.4,
-        focusTimeline =
-            listOf(
-                FocusDataPoint("0분", 68f),
-                FocusDataPoint("10분", 74f),
-                FocusDataPoint("20분", 82f),
-                FocusDataPoint("30분", 78f),
-                FocusDataPoint("40분", 88f),
-                FocusDataPoint("50분", 84f),
-                FocusDataPoint("60분", 91f),
+        sensorTimelines =
+            SensorTimelines(
+                noise =
+                    listOf(
+                        SensorTimelinePoint("0분", 36f),
+                        SensorTimelinePoint("10분", 34f),
+                        SensorTimelinePoint("20분", 38f),
+                        SensorTimelinePoint("30분", 32f),
+                        SensorTimelinePoint("40분", 35f),
+                        SensorTimelinePoint("50분", 33f),
+                        SensorTimelinePoint("60분", 34f),
+                    ),
+                light =
+                    listOf(
+                        SensorTimelinePoint("0분", 480f),
+                        SensorTimelinePoint("10분", 520f),
+                        SensorTimelinePoint("20분", 560f),
+                        SensorTimelinePoint("30분", 530f),
+                        SensorTimelinePoint("40분", 510f),
+                        SensorTimelinePoint("50분", 545f),
+                        SensorTimelinePoint("60분", 520f),
+                    ),
+                vibration =
+                    listOf(
+                        SensorTimelinePoint("0분", 0.020f),
+                        SensorTimelinePoint("10분", 0.034f),
+                        SensorTimelinePoint("20분", 0.028f),
+                        SensorTimelinePoint("30분", 0.041f),
+                        SensorTimelinePoint("40분", 0.030f),
+                        SensorTimelinePoint("50분", 0.025f),
+                        SensorTimelinePoint("60분", 0.032f),
+                    ),
             ),
     )

@@ -1,6 +1,7 @@
 package net.focustation.myapplication.session
 
 import net.focustation.myapplication.data.model.FocusDataPoint
+import net.focustation.myapplication.data.model.SensorTimelines
 import net.focustation.myapplication.data.repository.SensorSummaryPayload
 import net.focustation.myapplication.util.DebugLog
 
@@ -11,6 +12,7 @@ data class SessionReportDraft(
     val avgIlluminance: Float,
     val avgVibration: Double,
     val focusTimeline: List<FocusDataPoint>,
+    val sensorTimelines: SensorTimelines = SensorTimelines(),
     val placeName: String = "",
     val placeLatitude: Double? = null,
     val placeLongitude: Double? = null,
@@ -27,7 +29,7 @@ object SessionReportDraftStore {
     @Synchronized
     fun save(draft: SessionReportDraft) {
         DebugLog.d(
-            "[DraftStore][저장] 분=${draft.totalFocusMinutes}, 평균점수=${draft.avgEnvironmentScore}, 타임라인=${draft.focusTimeline.size}개",
+            "[DraftStore][저장] 분=${draft.totalFocusMinutes}, 센서추이=${draft.sensorTimelines.totalCount()}개",
         )
         latestDraft = draft
     }
@@ -54,9 +56,11 @@ object SessionReportDraftStore {
                 DebugLog.w("[DraftStore][소비] 저장된 draft가 없습니다.")
             } else {
                 DebugLog.d(
-                    "[DraftStore][소비] 분=${it.totalFocusMinutes}, 평균점수=${it.avgEnvironmentScore}, 타임라인=${it.focusTimeline.size}개",
+                    "[DraftStore][소비] 분=${it.totalFocusMinutes}, 센서추이=${it.sensorTimelines.totalCount()}개",
                 )
             }
             latestDraft = null
         }
 }
+
+private fun SensorTimelines.totalCount(): Int = noise.size + light.size + vibration.size

@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import net.focustation.myapplication.data.model.EnvironmentSnapshot
+import net.focustation.myapplication.data.model.SensorTimelinePoint
+import net.focustation.myapplication.data.model.SensorTimelines
 import net.focustation.myapplication.data.repository.CreateSessionRequest
 import net.focustation.myapplication.data.repository.FirestoreStudyRepository
 import net.focustation.myapplication.data.repository.FirestoreSurveyRepository
@@ -270,6 +272,7 @@ class FocusSessionViewModel(
     companion object {
         private const val WINDOW = 30
         private const val DISPLAY_HISTORY = 30
+        private const val SENSOR_TIMELINE_MAX_POINTS = 24
     }
 
     init {
@@ -414,6 +417,7 @@ class FocusSessionViewModel(
                 vibrationSamples = vibrationSamples.toList(),
                 measurementDurationSec = state.elapsedSeconds,
             )
+        val sensorTimelines = buildSensorTimelines(state.elapsedSeconds)
         val selectedPlace = SessionPlaceSelectionStore.consume()
 
         DebugLog.d(
@@ -436,6 +440,7 @@ class FocusSessionViewModel(
                 avgIlluminance = avgIlluminance,
                 avgVibration = avgVibration,
                 focusTimeline = emptyList(),
+                sensorTimelines = sensorTimelines,
                 placeName = selectedPlace?.name.orEmpty(),
                 placeLatitude = selectedPlace?.latitude,
                 placeLongitude = selectedPlace?.longitude,
@@ -466,6 +471,49 @@ class FocusSessionViewModel(
         noiseSamples.clear()
         vibrationSamples.clear()
     }
+
+    private fun buildSensorTimelines(elapsedSeconds: Int): SensorTimelines =
+        SensorTimelines(
+            noise = buildSensorTimeline(noiseSamples.map { it.toFloat() }, elapsedSeconds),
+            light = buildSensorTimeline(lightSamples, elapsedSeconds),
+            vibration = buildSensorTimeline(vibrationSamples.map { it.toFloat() }, elapsedSeconds),
+        )
+
+    private fun buildSensorTimeline(
+        samples: List<Float>,
+        elapsedSeconds: Int,
+    ): List<SensorTimelinePoint> {
+        if (samples.isEmpty()) return emptyList()
+
+        val pointCount = samples.size.coerceAtMost(SENSOR_TIMELINE_MAX_POINTS)
+        val lastIndex = samples.lastIndex
+        val safeElapsedSeconds = elapsedSeconds.coerceAtLeast(0)
+        return List(pointCount) { index ->
+            val sampleIndex =
+                if (pointCount == 1) {
+                    0
+                } else {
+                    index * lastIndex / (pointCount - 1)
+                }
+            val seconds =
+                if (pointCount == 1) {
+                    safeElapsedSeconds
+                } else {
+                    index * safeElapsedSeconds / (pointCount - 1)
+                }
+            SensorTimelinePoint(
+                timeLabel = formatTimelineLabel(seconds),
+                value = samples[sampleIndex].coerceAtLeast(0f),
+            )
+        }
+    }
+
+    private fun formatTimelineLabel(seconds: Int): String =
+        if (seconds < 60) {
+            "${seconds}초"
+        } else {
+            "${seconds / 60}분"
+        }
 
     /**
      * Performs cleanup when the ViewModel is being destroyed.
@@ -660,6 +708,7 @@ class FeedbackSessionViewModel(
             avgIlluminance = draft.avgIlluminance.toDouble(),
             avgVibration = draft.avgVibration,
             focusTimeline = draft.focusTimeline,
+            sensorTimelines = draft.sensorTimelines,
             placeSnapshot =
                 PlaceSnapshotPayload(
                     name = draft.placeName.ifBlank { "장소 미지정" },

@@ -7,6 +7,8 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import net.focustation.myapplication.BuildConfig
 import net.focustation.myapplication.data.model.FocusDataPoint
+import net.focustation.myapplication.data.model.SensorTimelinePoint
+import net.focustation.myapplication.data.model.SensorTimelines
 import net.focustation.myapplication.util.DebugLog
 import org.json.JSONArray
 import org.json.JSONObject
@@ -51,6 +53,7 @@ data class CreateSessionRequest(
     val avgIlluminance: Double,
     val avgVibration: Double,
     val focusTimeline: List<FocusDataPoint>,
+    val sensorTimelines: SensorTimelines = SensorTimelines(),
     val placeSnapshot: PlaceSnapshotPayload,
     // context 10 + place 10 = 20개, snake_case. 라벨은 현재 계약에 없으므로 포함하지 않는다.
     val placeFeedback: Map<String, Any>,
@@ -187,10 +190,29 @@ class SessionApiRepository(
             .put("avgIlluminance", avgIlluminance)
             .put("avgVibration", avgVibration)
             .put("focusTimeline", timelineArray)
+            .put("sensorTimelines", sensorTimelines.toJson())
             .put("placeSnapshot", snapshotJson)
             .put("placeFeedback", feedbackJson)
             .put("sensorSummary", sensorSummary.toJson())
             .put("modelInput", modelInput.toJsonObject())
+    }
+
+    private fun SensorTimelines.toJson(): JSONObject =
+        JSONObject()
+            .put("noise", noise.toJsonArray())
+            .put("light", light.toJsonArray())
+            .put("vibration", vibration.toJsonArray())
+
+    private fun List<SensorTimelinePoint>.toJsonArray(): JSONArray {
+        val array = JSONArray()
+        forEach { point ->
+            array.put(
+                JSONObject()
+                    .put("timeLabel", point.timeLabel)
+                    .put("value", point.value.toDouble()),
+            )
+        }
+        return array
     }
 
     private fun SensorSummaryPayload.toJson(): JSONObject =
