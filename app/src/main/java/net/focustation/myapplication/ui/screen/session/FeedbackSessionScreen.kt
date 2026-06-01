@@ -56,7 +56,7 @@ private val distanceOptions =
 
 @Composable
 fun FeedbackSessionScreen(
-    onSubmit: () -> Unit,
+    onSubmit: (String) -> Unit,
     viewModel: FeedbackSessionViewModel = viewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -64,11 +64,21 @@ fun FeedbackSessionScreen(
     // 종료된 세션으로 되돌아가지 않도록 뒤로가기를 막고, 명시 버튼으로만 진행한다(기존 모달과 동일 정책).
     BackHandler(enabled = true) { }
 
-    LaunchedEffect(uiState.submitted) {
-        if (uiState.submitted) onSubmit()
+    LaunchedEffect(uiState.createdSessionId) {
+        uiState.createdSessionId?.let(onSubmit)
     }
 
-    Scaffold(containerColor = ReferenceDesignTokens.Screen) { paddingValues ->
+    Scaffold(
+        containerColor = ReferenceDesignTokens.Screen,
+        bottomBar = {
+            FeedbackSubmitBar(
+                isSaving = uiState.isSaving,
+                hasError = uiState.saveErrorMessage != null,
+                onSubmit = viewModel::submit,
+                onSkip = { onSubmit("") },
+            )
+        },
+    ) { paddingValues ->
         Column(
             modifier =
                 Modifier
@@ -78,7 +88,7 @@ fun FeedbackSessionScreen(
                     .verticalScroll(rememberScrollState())
                     .statusBarsPadding()
                     .padding(horizontal = 18.dp)
-                    .padding(top = 12.dp, bottom = 28.dp),
+                    .padding(top = 12.dp, bottom = 18.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Text(
@@ -145,15 +155,37 @@ fun FeedbackSessionScreen(
             }
 
             Spacer(Modifier.height(2.dp))
+        }
+    }
+}
 
+@Composable
+private fun FeedbackSubmitBar(
+    isSaving: Boolean,
+    hasError: Boolean,
+    onSubmit: () -> Unit,
+    onSkip: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = ReferenceDesignTokens.Screen,
+        shadowElevation = 8.dp,
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 18.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             Button(
-                onClick = { viewModel.submit() },
-                enabled = !uiState.isSaving,
+                onClick = onSubmit,
+                enabled = !isSaving,
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .height(54.dp)
-                        .navigationBarsPadding(),
+                        .height(54.dp),
                 shape = CircleShape,
                 colors =
                     ButtonDefaults.buttonColors(
@@ -164,19 +196,18 @@ fun FeedbackSessionScreen(
                 Text(
                     text =
                         when {
-                            uiState.isSaving -> "저장 중..."
-                            uiState.saveErrorMessage != null -> "다시 시도"
+                            isSaving -> "저장 중..."
+                            hasError -> "다시 시도"
                             else -> "리포트 저장하기"
                         },
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
                 )
             }
 
-            // 저장 실패(POST 미생성)는 시스템 오류 → 탈출구를 노출한다.
-            if (uiState.saveErrorMessage != null) {
+            if (hasError) {
                 TextButton(
-                    onClick = onSubmit,
-                    enabled = !uiState.isSaving,
+                    onClick = onSkip,
+                    enabled = !isSaving,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text(

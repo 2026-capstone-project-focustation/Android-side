@@ -541,6 +541,7 @@ data class FeedbackUiState(
     val isSaving: Boolean = false,
     val saveErrorMessage: String? = null,
     val submitted: Boolean = false,
+    val createdSessionId: String? = null,
 )
 
 private val defaultPlaceFeedbackRatings: Map<String, Int> = placeRatingQuestions.associate { it.key to 3 }
@@ -621,7 +622,12 @@ class FeedbackSessionViewModel(
                 DebugLog.d("[Feedback][Save] 성공 sessionId=${created.sessionId}, mlScore=${created.mlScore}")
                 SessionReportDraftStore.clearIfCurrent(draft)
                 _uiState.update {
-                    it.copy(isSaving = false, saveErrorMessage = null, submitted = true)
+                    it.copy(
+                        isSaving = false,
+                        saveErrorMessage = null,
+                        submitted = true,
+                        createdSessionId = created.sessionId,
+                    )
                 }
             } else {
                 val error = result.exceptionOrNull()

@@ -149,8 +149,12 @@ fun AppNavGraph(navController: NavHostController) {
 
         composable(NavRoute.FeedbackSession.route) {
             FeedbackSessionScreen(
-                onSubmit = {
-                    navController.navigateHomeAfterSession()
+                onSubmit = { sessionId ->
+                    if (sessionId.isBlank()) {
+                        navController.navigateHomeAfterSession()
+                    } else {
+                        navController.navigateToCreatedReport(sessionId)
+                    }
                 },
             )
         }
@@ -234,6 +238,13 @@ private fun NavHostController.navigateToMainTab(route: String) {
 
 private fun NavHostController.navigateHomeAfterSession() {
     navigate(NavRoute.Dashboard.route) {
+        popUpTo(NavRoute.Dashboard.route)
+        launchSingleTop = true
+    }
+}
+
+private fun NavHostController.navigateToCreatedReport(sessionId: String) {
+    navigate(NavRoute.SessionReportDetail.createRoute(sessionId)) {
         popUpTo(NavRoute.Dashboard.route)
         launchSingleTop = true
     }
