@@ -13,7 +13,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import net.focustation.myapplication.ui.theme.FocustationTheme
 
 enum class MainBottomDestination {
     HOME,
@@ -72,3 +74,14 @@ private fun MainBottomDestination.icon(): ImageVector =
         MainBottomDestination.MAP -> Icons.Filled.Map
         MainBottomDestination.SETTINGS -> Icons.Filled.Settings
     }
+
+@Preview(showBackground = true)
+@Composable
+private fun MainBottomNavigationBarPreview() {
+    FocustationTheme {
+        MainBottomNavigationBar(
+            selected = MainBottomDestination.HOME,
+            onTabClick = {},
+        )
+    }
+}

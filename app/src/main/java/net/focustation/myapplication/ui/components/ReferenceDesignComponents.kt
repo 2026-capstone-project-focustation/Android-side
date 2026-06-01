@@ -58,9 +58,11 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import net.focustation.myapplication.ui.theme.FocustationTheme
 
 object ReferenceDesignTokens {
     val Canvas = Color(0xFFEAF4FF)
@@ -939,6 +941,14 @@ fun ShowcaseListScreen(
             }
             PrimaryCTA(label = "기록 시작하기", onClick = onFinish)
         }
+    }
+}
+
+@Preview(showBackground = true, widthDp = 390, heightDp = 860)
+@Composable
+private fun ReferenceDesignShowcasePreview() {
+    FocustationTheme {
+        ReferenceDesignShowcaseScreen()
     }
 }
 

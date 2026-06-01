@@ -43,7 +43,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import net.focustation.myapplication.data.model.FocusDataPoint
 import net.focustation.myapplication.data.repository.FirestoreStudyRepository
 import net.focustation.myapplication.data.repository.StudySessionRecord
 import net.focustation.myapplication.ui.components.MiniLineGraph
@@ -51,6 +53,7 @@ import net.focustation.myapplication.ui.components.ReferenceDesignTokens
 import net.focustation.myapplication.ui.theme.ColorLight
 import net.focustation.myapplication.ui.theme.ColorNoise
 import net.focustation.myapplication.ui.theme.ColorVibration
+import net.focustation.myapplication.ui.theme.FocustationTheme
 import net.focustation.myapplication.util.DebugLog
 import java.time.Instant
 import java.time.ZoneId
@@ -87,6 +90,21 @@ fun SessionReportDetailScreen(
         )
     }
 
+    SessionReportDetailContent(
+        isLoading = isLoading,
+        record = record,
+        errorMessage = errorMessage,
+        onBack = onBack,
+    )
+}
+
+@Composable
+private fun SessionReportDetailContent(
+    isLoading: Boolean,
+    record: StudySessionRecord?,
+    errorMessage: String?,
+    onBack: () -> Unit,
+) {
     Scaffold(
         containerColor = ReferenceDesignTokens.Screen,
     ) { paddingValues ->
@@ -115,18 +133,17 @@ fun SessionReportDetailScreen(
 
                 errorMessage != null -> {
                     Text(
-                        text = errorMessage ?: "오류가 발생했어요.",
+                        text = errorMessage,
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
 
                 record != null -> {
-                    val session = record ?: return@Column
-                    SessionDetailHero(session = session)
-                    FocusTimelineCard(session = session)
-                    EnvironmentAnalysisGrid(session = session)
-                    SessionMetaSection(session = session)
+                    SessionDetailHero(session = record)
+                    FocusTimelineCard(session = record)
+                    EnvironmentAnalysisGrid(session = record)
+                    SessionMetaSection(session = record)
                 }
             }
         }
@@ -469,3 +486,39 @@ private fun formatDate(epochMillis: Long): String {
     val formatter = DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm")
     return formatter.format(Instant.ofEpochMilli(epochMillis).atZone(ZoneId.systemDefault()))
 }
+
+@Preview(showBackground = true)
+@Composable
+private fun SessionReportDetailPreview() {
+    FocustationTheme {
+        SessionReportDetailContent(
+            isLoading = false,
+            record = sampleStudySessionRecord(),
+            errorMessage = null,
+            onBack = {},
+        )
+    }
+}
+
+private fun sampleStudySessionRecord(): StudySessionRecord =
+    StudySessionRecord(
+        sessionId = "preview_session",
+        endedAtEpochMillis = 1_750_000_000_000L,
+        durationSec = 4_200,
+        focusScoreAvg = 82f,
+        avgNoise = 34f,
+        avgIlluminance = 520f,
+        avgVibration = 0.032,
+        placeName = "중앙 도서관 3층",
+        mlScore = 86.4,
+        focusTimeline =
+            listOf(
+                FocusDataPoint("0분", 68f),
+                FocusDataPoint("10분", 74f),
+                FocusDataPoint("20분", 82f),
+                FocusDataPoint("30분", 78f),
+                FocusDataPoint("40분", 88f),
+                FocusDataPoint("50분", 84f),
+                FocusDataPoint("60분", 91f),
+            ),
+    )

@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -25,6 +26,7 @@ import net.focustation.myapplication.ui.theme.FocusInk
 import net.focustation.myapplication.ui.theme.FocusLine
 import net.focustation.myapplication.ui.theme.FocusMuted
 import net.focustation.myapplication.ui.theme.FocusSurface
+import net.focustation.myapplication.ui.theme.FocustationTheme
 
 // ─── 환경 지표 카드 (소음, 조도, 진동) ──────────────────────────────────────
 
@@ -299,6 +301,41 @@ fun StarRatingSelector(
                     color = if (star <= rating) ColorLight else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun CommonComponentsPreview() {
+    FocustationTheme {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.background)
+                    .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            EnvironmentSnapshotRow(
+                noise = 34f,
+                illuminance = 520f,
+                vibration = 0.032,
+            )
+            FocusScoreGauge(score = 82f, modifier = Modifier.align(Alignment.CenterHorizontally))
+            MiniLineGraph(
+                dataPoints = listOf(35f, 42f, 38f, 54f, 46f, 62f, 48f),
+                modifier = Modifier.fillMaxWidth().height(80.dp),
+                minValue = 20f,
+                maxValue = 80f,
+            )
+            SessionSummaryCard(
+                date = "2026.06.01",
+                place = "중앙 도서관",
+                focusScore = 86,
+                durationMin = 70,
+            )
+            StarRatingSelector(rating = 4, onRatingChange = {})
         }
     }
 }
