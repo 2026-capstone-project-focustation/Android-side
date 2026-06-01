@@ -24,6 +24,8 @@ data class DashboardUiState(
     val user: User = User(id = "", name = "사용자", email = ""),
     val todayAvgFocus: Int = 0,
     val todayWorkMinutes: Int = 0,
+    val hasTodaySessions: Boolean = false,
+    val hasEnvironmentSnapshot: Boolean = false,
     val environmentSnapshot: EnvironmentSnapshot =
         EnvironmentSnapshot(
             noiseLevel = 0f,
@@ -107,6 +109,8 @@ class DashboardViewModel(
                             user = user,
                             todayAvgFocus = todayAvgFocus,
                             todayWorkMinutes = todayWorkMinutes,
+                            hasTodaySessions = todayRecords.isNotEmpty(),
+                            hasEnvironmentSnapshot = latest != null,
                             environmentSnapshot = snapshot,
                             recentSessions = recentTop3,
                             isLoading = false,
@@ -119,6 +123,8 @@ class DashboardViewModel(
                     _uiState.update {
                         it.copy(
                             user = user,
+                            hasTodaySessions = false,
+                            hasEnvironmentSnapshot = false,
                             isLoading = false,
                             recentSessions = emptyList(),
                             errorMessage = error.message ?: "홈 데이터를 불러오지 못했어요.",

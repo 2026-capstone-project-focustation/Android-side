@@ -140,14 +140,24 @@ fun DashboardScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         StatCard(
-                            value = "${uiState.todayAvgFocus.coerceAtLeast(0)}",
+                            value =
+                                if (uiState.hasTodaySessions) {
+                                    "${uiState.todayAvgFocus.coerceAtLeast(0)}"
+                                } else {
+                                    "--"
+                                },
                             label = "오늘 점수",
                             icon = Icons.Filled.Insights,
                             iconColor = FocusBlue,
                             modifier = Modifier.weight(1f),
                         )
                         StatCard(
-                            value = uiState.todayWorkMinutes.formatWorkTime(),
+                            value =
+                                if (uiState.hasTodaySessions) {
+                                    uiState.todayWorkMinutes.formatWorkTime()
+                                } else {
+                                    "--"
+                                },
                             label = "작업 시간",
                             icon = Icons.Outlined.Schedule,
                             iconColor = FocusYellow,
@@ -168,6 +178,7 @@ fun DashboardScreen(
                         SectionHeader(title = "지금 공간 상태", subtitle = "최근 측정값 기준")
                         Spacer(Modifier.height(18.dp))
                         DashboardEnvironmentSummary(
+                            hasData = uiState.hasEnvironmentSnapshot,
                             noise = uiState.environmentSnapshot.noiseLevel,
                             illuminance = uiState.environmentSnapshot.illuminance,
                             vibration = uiState.environmentSnapshot.vibration,
@@ -352,18 +363,23 @@ private fun DashboardCalendarStrip(days: List<WeekDaySlot>) {
 
 @Composable
 private fun DashboardEnvironmentSummary(
+    hasData: Boolean,
     noise: Float,
     illuminance: Float,
     vibration: Double,
     onStartSession: () -> Unit,
 ) {
     val totalScore =
-        remember(noise, illuminance, vibration) {
-            calculateCurrentEnvironmentScore(
-                noise = noise,
-                illuminance = illuminance,
-                vibration = vibration,
-            )
+        remember(hasData, noise, illuminance, vibration) {
+            if (hasData) {
+                calculateCurrentEnvironmentScore(
+                    noise = noise,
+                    illuminance = illuminance,
+                    vibration = vibration,
+                )
+            } else {
+                null
+            }
         }
 
     Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
@@ -387,7 +403,7 @@ private fun DashboardEnvironmentSummary(
             ) {
                 MiniSensorCard(
                     label = "조도",
-                    value = "%.0f".format(illuminance.coerceAtLeast(0f)),
+                    value = if (hasData) "%.0f".format(illuminance.coerceAtLeast(0f)) else "--",
                     unit = "lux",
                     icon = Icons.Filled.WbSunny,
                     containerColor = FocusYellow,
@@ -396,7 +412,7 @@ private fun DashboardEnvironmentSummary(
                 )
                 MiniSensorCard(
                     label = "소음",
-                    value = "%.0f".format(noise.coerceAtLeast(0f)),
+                    value = if (hasData) "%.0f".format(noise.coerceAtLeast(0f)) else "--",
                     unit = "dB",
                     icon = Icons.Filled.GraphicEq,
                     containerColor = FocusInk,
@@ -405,7 +421,7 @@ private fun DashboardEnvironmentSummary(
                 )
                 MiniSensorCard(
                     label = "진동",
-                    value = "%.3f".format(vibration.coerceAtLeast(0.0)),
+                    value = if (hasData) "%.3f".format(vibration.coerceAtLeast(0.0)) else "--",
                     unit = "m/s²",
                     icon = Icons.Filled.Sensors,
                     containerColor = FocusSurface,
@@ -487,7 +503,7 @@ private fun MiniSensorCard(
 
 @Composable
 private fun TotalScoreGoalCard(
-    score: Int,
+    score: Int?,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -534,7 +550,7 @@ private fun TotalScoreGoalCard(
                     }
                     Row(verticalAlignment = Alignment.Bottom) {
                         Text(
-                            text = score.toString(),
+                            text = score?.toString() ?: "--",
                             style = MaterialTheme.typography.displayMedium,
                             color = Color.White,
                             fontWeight = FontWeight.ExtraBold,
@@ -663,8 +679,9 @@ private fun calculateCurrentEnvironmentScore(
         .coerceIn(0, 100)
 }
 
-private fun environmentScoreLabel(score: Int): String =
+private fun environmentScoreLabel(score: Int?): String =
     when {
+        score == null -> "최근 측정 기록 없음"
         score >= 80 -> "집중하기 좋은 공간"
         score >= 60 -> "무난한 집중 환경"
         score > 0 -> "조정이 필요한 공간"
