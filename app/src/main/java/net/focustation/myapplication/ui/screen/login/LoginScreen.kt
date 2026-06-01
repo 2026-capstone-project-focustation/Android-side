@@ -5,7 +5,6 @@ package net.focustation.myapplication.ui.screen.login
 import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,7 +23,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -185,29 +183,6 @@ fun LoginScreen(
                 Text(
                     text = "Google로 계속하기",
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                )
-            }
-
-            Spacer(Modifier.height(12.dp))
-
-            OutlinedButton(
-                onClick = {},
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .height(54.dp),
-                enabled = false,
-                shape = CircleShape,
-                border = BorderStroke(1.dp, ReferenceDesignTokens.Border),
-                colors =
-                    ButtonDefaults.outlinedButtonColors(
-                        contentColor = ReferenceDesignTokens.TextSecondary,
-                        disabledContentColor = ReferenceDesignTokens.TextMuted,
-                    ),
-            ) {
-                Text(
-                    text = "이메일 로그인 준비 중",
-                    style = MaterialTheme.typography.labelLarge,
                 )
             }
 
