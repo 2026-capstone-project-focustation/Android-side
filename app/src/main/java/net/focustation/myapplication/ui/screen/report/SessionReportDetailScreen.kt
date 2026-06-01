@@ -49,6 +49,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import net.focustation.myapplication.data.model.SensorTimelinePoint
 import net.focustation.myapplication.data.model.SensorTimelines
 import net.focustation.myapplication.data.repository.FirestoreStudyRepository
@@ -60,7 +61,6 @@ import net.focustation.myapplication.ui.theme.ColorNoise
 import net.focustation.myapplication.ui.theme.ColorVibration
 import net.focustation.myapplication.ui.theme.FocustationTheme
 import net.focustation.myapplication.util.DebugLog
-import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
