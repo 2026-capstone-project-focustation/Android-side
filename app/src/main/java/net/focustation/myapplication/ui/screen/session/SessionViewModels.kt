@@ -11,7 +11,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import net.focustation.myapplication.data.model.EnvironmentSnapshot
-import net.focustation.myapplication.data.model.FocusDataPoint
 import net.focustation.myapplication.data.repository.CreateSessionRequest
 import net.focustation.myapplication.data.repository.FirestoreStudyRepository
 import net.focustation.myapplication.data.repository.FirestoreSurveyRepository
@@ -31,7 +30,6 @@ import net.focustation.myapplication.util.DebugLog
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
-import kotlin.math.roundToInt
 
 // ─── 환경 분석 세션 ───────────────────────────────────────────────────────────
 
@@ -91,8 +89,8 @@ class EnvironmentSessionViewModel(
      * Starts collecting ambient noise (dB) samples and updates the view model's noise buffer and derived state.
      *
      * If noise collection is already active this is a no-op. Otherwise it sets `hasNoisePerm = true` and
-     * launches a coroutine that collects values from `noiseManager`, appends them to `noiseBuf` (keeping at most
-     * `WINDOW` most recent samples), and invokes `recalculate()` after each sample.
+     * launches a coroutine that collects values from `noiseManager`, appends them to `noiseBuf`,
+     * and refreshes the raw sensor snapshot after each sample.
      */
     fun startNoiseCollection() {
         if (noiseJob != null) return
@@ -232,8 +230,12 @@ data class FocusSessionUiState(
     val isRunning: Boolean = false,
     val isPaused: Boolean = false,
     val elapsedSeconds: Int = 0,
-    val environmentFitScore: Float = 0f, // 0~100
-    val fitHistory: List<Float> = emptyList(),
+    val currentNoiseDb: Float? = null,
+    val currentLightLux: Float? = null,
+    val currentVibration: Double? = null,
+    val noiseHistory: List<Float> = emptyList(),
+    val lightHistory: List<Float> = emptyList(),
+    val vibrationHistory: List<Float> = emptyList(),
 )
 
 class FocusSessionViewModel(
@@ -267,6 +269,7 @@ class FocusSessionViewModel(
 
     companion object {
         private const val WINDOW = 30
+        private const val DISPLAY_HISTORY = 30
     }
 
     init {
@@ -279,7 +282,7 @@ class FocusSessionViewModel(
                     lightCount += 1
                     lightSamples += lux
                 }
-                recalculate()
+                updateSensorSnapshot()
             }
         }
         viewModelScope.launch {
@@ -291,7 +294,7 @@ class FocusSessionViewModel(
                     vibrationCount += 1
                     vibrationSamples += m
                 }
-                recalculate()
+                updateSensorSnapshot()
             }
         }
     }
@@ -316,41 +319,30 @@ class FocusSessionViewModel(
                         noiseCount += 1
                         noiseSamples += db
                     }
-                    recalculate()
+                    updateSensorSnapshot()
                 }
             }
     }
 
-    /**
-     * Recomputes the environment fit score from the current sensor buffers and updates the UI state.
-     *
-     * Computes component scores from available light, noise (only when permission granted), and vibration buffers,
-     * aggregates them into a total fit score, then sets `environmentFitScore` and appends the value to `fitHistory`
-     * (keeping only the last `DISPLAY_HISTORY` entries).
-     */
-    private fun recalculate() {
-        val lightScore = if (lightBuf.isNotEmpty()) ScoreCalculator.calculateLightScore(lightBuf.toList()) else null
-        val noiseScore =
-            if (hasNoisePerm &&
-                noiseBuf.isNotEmpty()
-            ) {
-                ScoreCalculator.calculateNoiseScore(noiseBuf.toList())
-            } else {
-                null
-            }
-        val vibScore = if (vibBuf.isNotEmpty()) ScoreCalculator.calculateVibrationScore(vibBuf.toList()) else null
-
-        val total = ScoreCalculator.calculateTotalScore(listOfNotNull(lightScore, noiseScore, vibScore)).toFloat()
-
+    private fun updateSensorSnapshot() {
         _uiState.update { s ->
             s.copy(
-                environmentFitScore = total,
-                fitHistory =
-                    if (s.isRunning) {
-                        s.fitHistory + total
+                currentNoiseDb =
+                    if (hasNoisePerm) {
+                        noiseBuf.lastOrNull()?.toFloat() ?: s.currentNoiseDb
                     } else {
-                        s.fitHistory
+                        s.currentNoiseDb
                     },
+                currentLightLux = lightBuf.lastOrNull() ?: s.currentLightLux,
+                currentVibration = vibBuf.lastOrNull() ?: s.currentVibration,
+                noiseHistory =
+                    if (hasNoisePerm) {
+                        noiseBuf.takeLast(DISPLAY_HISTORY).map { it.toFloat() }
+                    } else {
+                        s.noiseHistory
+                    },
+                lightHistory = lightBuf.takeLast(DISPLAY_HISTORY),
+                vibrationHistory = vibBuf.takeLast(DISPLAY_HISTORY).map { it.toFloat() },
             )
         }
     }
@@ -369,8 +361,12 @@ class FocusSessionViewModel(
             _uiState.update {
                 it.copy(
                     elapsedSeconds = 0,
-                    fitHistory = emptyList(),
-                    environmentFitScore = 0f,
+                    currentNoiseDb = null,
+                    currentLightLux = null,
+                    currentVibration = null,
+                    noiseHistory = emptyList(),
+                    lightHistory = emptyList(),
+                    vibrationHistory = emptyList(),
                 )
             }
         }
@@ -408,13 +404,6 @@ class FocusSessionViewModel(
         timerJob?.cancel()
 
         val state = _uiState.value
-        val timeline = buildFocusTimeline(state.fitHistory, state.elapsedSeconds)
-        val avgScore =
-            if (state.fitHistory.isNotEmpty()) {
-                state.fitHistory.average().toFloat()
-            } else {
-                state.environmentFitScore
-            }
         val avgNoise = if (noiseCount > 0) (noiseSum / noiseCount).toFloat() else 0f
         val avgIlluminance = if (lightCount > 0) (lightSum / lightCount).toFloat() else 0f
         val avgVibration = if (vibrationCount > 0) vibrationSum / vibrationCount else 0.0
@@ -428,10 +417,10 @@ class FocusSessionViewModel(
         val selectedPlace = SessionPlaceSelectionStore.consume()
 
         DebugLog.d(
-            "[집중세션][종료] 경과=${state.elapsedSeconds}초, 히스토리=${state.fitHistory.size}개, 타임라인=${timeline.size}개",
+            "[집중세션][종료] 경과=${state.elapsedSeconds}초, 소음샘플=${noiseSamples.size}개, 조도샘플=${lightSamples.size}개, 진동샘플=${vibrationSamples.size}개",
         )
         DebugLog.d(
-            "[집중세션][종료] 평균점수=$avgScore, 평균소음=$avgNoise, 평균조도=$avgIlluminance, 평균진동=$avgVibration",
+            "[집중세션][종료] 평균소음=$avgNoise, 평균조도=$avgIlluminance, 평균진동=$avgVibration",
         )
 
         SessionReportDraftStore.save(
@@ -442,12 +431,11 @@ class FocusSessionViewModel(
                     } else {
                         0
                     },
-                avgEnvironmentScore =
-                avgScore,
+                avgEnvironmentScore = 0f,
                 avgNoise = avgNoise,
                 avgIlluminance = avgIlluminance,
                 avgVibration = avgVibration,
-                focusTimeline = timeline,
+                focusTimeline = emptyList(),
                 placeName = selectedPlace?.name.orEmpty(),
                 placeLatitude = selectedPlace?.latitude,
                 placeLongitude = selectedPlace?.longitude,
@@ -477,37 +465,6 @@ class FocusSessionViewModel(
         lightSamples.clear()
         noiseSamples.clear()
         vibrationSamples.clear()
-    }
-
-    private fun buildFocusTimeline(
-        fitHistory: List<Float>,
-        elapsedSeconds: Int,
-    ): List<FocusDataPoint> {
-        if (fitHistory.isEmpty()) return emptyList()
-
-        val maxPoints = 24
-        val indices =
-            if (fitHistory.size <= maxPoints) {
-                fitHistory.indices.toList()
-            } else {
-                (0 until maxPoints)
-                    .map { i ->
-                        ((i.toDouble() * (fitHistory.size - 1)) / (maxPoints - 1)).roundToInt()
-                    }.distinct()
-            }
-
-        return indices.map { index ->
-            val secondAtPoint =
-                if (fitHistory.size <= 1 || elapsedSeconds <= 0) {
-                    0
-                } else {
-                    ((index.toDouble() / (fitHistory.size - 1)) * elapsedSeconds).toInt()
-                }
-            FocusDataPoint(
-                timeLabel = "${secondAtPoint / 60}분",
-                focusScore = fitHistory[index].coerceIn(0f, 100f),
-            )
-        }
     }
 
     /**
