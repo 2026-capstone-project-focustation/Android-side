@@ -529,14 +529,14 @@ private fun List<StudyHistoryUiItem>.sortedBy(option: ReportSortOption): List<St
         ReportSortOption.PLACE_NAME -> sortedBy { it.placeName }
     }
 
-private fun StudyHistoryUiItem.displayScore(): Int = (mlScore?.toInt() ?: focusScore).coerceIn(0, 100)
+// mlScore는 ML 새 계약 전까지 더미값 -1로 저장된다. 0 미만이면 아직 점수가 없는 것으로 본다.
+private val StudyHistoryUiItem.validMlScore: Double?
+    get() = mlScore?.takeIf { it >= 0.0 }
+
+private fun StudyHistoryUiItem.displayScore(): Int = (validMlScore?.toInt() ?: focusScore).coerceIn(0, 100)
 
 private fun StudyHistoryUiItem.scoreSummaryLabel(): String =
-    if (mlScore == null) {
-        "환경 ${focusScore}점"
-    } else {
-        "ML ${mlScore.toInt()}점 · 환경 ${focusScore}점"
-    }
+    validMlScore?.let { "ML ${it.toInt()}점 · 집중 ${focusScore}점" } ?: "집중 ${focusScore}점"
 
 private fun ReportSortOption.label(): String =
     when (this) {

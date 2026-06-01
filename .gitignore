@@ -28,6 +28,7 @@ google-services.json
 
 # Local design references and source assets
 /.claude/
+/docs/
 /active_learning_float_lottie.json
 /analyzing_progress_floating_lottie.json
 /celebration_floating_lottie.json

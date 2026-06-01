@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Assessment
 import androidx.compose.material.icons.outlined.CheckCircle
@@ -29,6 +30,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -138,6 +140,7 @@ fun OnboardingSetupScreen(
                 totalSteps = 8,
                 primaryLabel = "좋아요",
                 onPrimary = { step = 2 },
+                onBack = { step = 0 },
             ) {
                 PokeyLottieHero(
                     rawRes = R.raw.teamwork_palette_floating_lottie,
@@ -158,6 +161,7 @@ fun OnboardingSetupScreen(
                 page = step - 2,
                 displayName = displayName,
                 onNext = { step += 1 },
+                onBack = { step -= 1 },
             )
 
         else ->
@@ -176,6 +180,7 @@ fun OnboardingSetupScreen(
                     store.markCompleted()
                     onExploreFirst()
                 },
+                onBack = { step = 4 },
             ) {
                 PokeyLottieHero(
                     rawRes = R.raw.celebration_floating_lottie,
@@ -201,6 +206,7 @@ private fun AppIntroPage(
     page: Int,
     displayName: String,
     onNext: () -> Unit,
+    onBack: () -> Unit,
 ) {
     val intro = appIntroPages[page.coerceIn(0, appIntroPages.lastIndex)]
     PokeyOnboardingScaffold(
@@ -208,6 +214,7 @@ private fun AppIntroPage(
         totalSteps = 8,
         primaryLabel = "다음",
         onPrimary = onNext,
+        onBack = onBack,
     ) {
         PokeyLottieHero(
             rawRes = intro.lottieRes,
@@ -229,6 +236,7 @@ private fun PokeyOnboardingScaffold(
     onPrimary: () -> Unit,
     secondaryLabel: String? = null,
     onSecondary: (() -> Unit)? = null,
+    onBack: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(
@@ -240,6 +248,8 @@ private fun PokeyOnboardingScaffold(
                 .navigationBarsPadding()
                 .padding(horizontal = 24.dp, vertical = 18.dp),
     ) {
+        OnboardingTopBar(onBack = onBack)
+
         OnboardingProgress(step = step, totalSteps = totalSteps)
 
         Column(
@@ -301,6 +311,29 @@ private fun PokeyOnboardingScaffold(
             }
         }
     }
+}
+
+@Composable
+private fun OnboardingTopBar(onBack: (() -> Unit)?) {
+    if (onBack == null) return
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(40.dp),
+    ) {
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier.align(Alignment.CenterStart),
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                contentDescription = "이전 단계",
+                tint = ReferenceDesignTokens.TextPrimary,
+            )
+        }
+    }
+    Spacer(Modifier.height(4.dp))
 }
 
 @Composable

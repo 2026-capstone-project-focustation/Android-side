@@ -8,6 +8,8 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import net.focustation.myapplication.session.SelectedSessionPlace
+import net.focustation.myapplication.session.SessionPlaceSelectionStore
 import net.focustation.myapplication.ui.screen.dashboard.DashboardScreen
 import net.focustation.myapplication.ui.screen.login.LoginScreen
 import net.focustation.myapplication.ui.screen.onboarding.OnboardingScreen
@@ -19,6 +21,7 @@ import net.focustation.myapplication.ui.screen.session.EnvironmentSessionScreen
 import net.focustation.myapplication.ui.screen.session.FeedbackSessionScreen
 import net.focustation.myapplication.ui.screen.session.FocusSessionScreen
 import net.focustation.myapplication.ui.screen.session.PlaceSelectionScreen
+import net.focustation.myapplication.ui.screen.session.StartSessionPlaceSheet
 import net.focustation.myapplication.ui.screen.settings.SettingsScreen
 import net.focustation.myapplication.ui.screen.space.SpaceHistoryScreen
 import net.focustation.myapplication.ui.screen.survey.SurveyScreen
@@ -96,14 +99,43 @@ fun AppNavGraph(navController: NavHostController) {
 
         composable(NavRoute.EnvironmentSession.route) {
             EnvironmentSessionScreen(
-                onSessionComplete = { navController.navigate(NavRoute.PlaceSelection.route) },
+                onSessionComplete = { navController.navigate(NavRoute.StartSessionPlace.route) },
                 onBack = { navController.popBackStack() },
+            )
+        }
+
+        composable(NavRoute.StartSessionPlace.route) {
+            StartSessionPlaceSheet(
+                onSelectRecent = { place ->
+                    SessionPlaceSelectionStore.save(
+                        SelectedSessionPlace(
+                            name = place.name,
+                            latitude = place.latitude,
+                            longitude = place.longitude,
+                        ),
+                    )
+                    navController.navigate(NavRoute.FocusSession.route) {
+                        popUpTo(NavRoute.StartSessionPlace.route) { inclusive = true }
+                    }
+                },
+                onPickManually = { navController.navigate(NavRoute.PlaceSelection.route) },
+                onSkip = {
+                    SessionPlaceSelectionStore.clear()
+                    navController.navigate(NavRoute.FocusSession.route) {
+                        popUpTo(NavRoute.StartSessionPlace.route) { inclusive = true }
+                    }
+                },
+                onDismiss = { navController.popBackStack() },
             )
         }
 
         composable(NavRoute.PlaceSelection.route) {
             PlaceSelectionScreen(
-                onPlaceSelected = { navController.navigate(NavRoute.FocusSession.route) },
+                onPlaceSelected = {
+                    navController.navigate(NavRoute.FocusSession.route) {
+                        popUpTo(NavRoute.StartSessionPlace.route) { inclusive = true }
+                    }
+                },
                 onBack = { navController.popBackStack() },
             )
         }

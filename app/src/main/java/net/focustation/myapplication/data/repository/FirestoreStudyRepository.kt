@@ -1,10 +1,8 @@
 package net.focustation.myapplication.data.repository
 
-import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
@@ -13,20 +11,14 @@ import net.focustation.myapplication.util.DebugLog
 import java.util.Locale
 import kotlin.math.abs
 
-data class StudySessionSaveRequest(
-    val totalFocusMinutes: Int,
-    val avgEnvironmentScore: Float,
-    val avgNoise: Float,
-    val avgIlluminance: Float,
-    val avgVibration: Double,
-    val focusTimeline: List<FocusDataPoint>,
-    val mlScore: Double? = null,
-    val placeName: String,
+data class SavedPlaceRequest(
+    val name: String,
     val latitude: Double? = null,
     val longitude: Double? = null,
 )
 
-data class SavedPlaceRequest(
+data class SavedPlaceRecord(
+    val id: String,
     val name: String,
     val latitude: Double? = null,
     val longitude: Double? = null,
@@ -54,64 +46,31 @@ class FirestoreStudyRepository(
     private val firestore by lazy { firestoreProvider() }
     private val auth by lazy { authProvider() }
 
-    suspend fun saveStudySession(request: StudySessionSaveRequest): Result<String> =
+    // 세션 문서 생성은 Firebase Functions(POST /sessions)가 담당한다. Android는 직접 쓰지 않는다.
+
+    suspend fun getSavedPlaces(limit: Long = 3): Result<List<SavedPlaceRecord>> =
         runCatching {
-            val uid = auth.currentUser?.uid ?: error("로그인 후 기록을 저장할 수 있어요.")
-            val sessionId = generateSessionId()
-            val now = Timestamp.now()
-            val totalDurationSec = request.totalFocusMinutes * 60
-            val normalizedPlaceName = request.placeName.ifBlank { "장소 미지정" }
-
-            DebugLog.d(
-                "[Firestore][세션저장][요청] uid=${uidForLog(
-                    uid,
-                )}, sessionId=$sessionId, 분=${request.totalFocusMinutes}, 타임라인=${request.focusTimeline.size}개",
-            )
-
-            val sessionPayload =
-                hashMapOf(
-                    "sessionId" to sessionId,
-                    "startedAt" to Timestamp(now.seconds - totalDurationSec, now.nanoseconds),
-                    "endedAt" to now,
-                    "durationSec" to totalDurationSec,
-                    "avgNoise" to request.avgNoise,
-                    "avgIlluminance" to request.avgIlluminance,
-                    "avgVibration" to request.avgVibration,
-                    "focusScoreAvg" to request.avgEnvironmentScore,
-                    "mlScore" to request.mlScore,
-                    "focusTimeline" to
-                        request.focusTimeline.map {
-                            mapOf(
-                                "timeLabel" to it.timeLabel,
-                                "focusScore" to it.focusScore,
-                            )
-                        },
-                    "placeSnapshot" to
-                        mapOf(
-                            "name" to normalizedPlaceName,
-                            "latitude" to request.latitude,
-                            "longitude" to request.longitude,
-                        ),
-                    // 소프트 삭제 기본값: 신규 문서는 항상 표시 상태로 저장
-                    "isDeleted" to false,
-                    "deletedAt" to null,
-                    "createdAt" to FieldValue.serverTimestamp(),
-                    "updatedAt" to FieldValue.serverTimestamp(),
-                )
-
-            firestore
-                .collection("users")
-                .document(uid)
-                .collection("sessions")
-                .document(sessionId)
-                .set(sessionPayload)
-                .await()
-
-            DebugLog.d("[Firestore][세션저장][성공] uid=${uidForLog(uid)}, sessionId=$sessionId")
-
-            sessionId
+            val uid = auth.currentUser?.uid ?: error("로그인 후 저장된 장소를 불러올 수 있어요.")
+            val snapshot =
+                firestore
+                    .collection("users")
+                    .document(uid)
+                    .collection("savedPlaces")
+                    .orderBy("updatedAt", Query.Direction.DESCENDING)
+                    .limit(limit)
+                    .get()
+                    .await()
+            snapshot.documents
+                .map { doc ->
+                    SavedPlaceRecord(
+                        id = doc.id,
+                        name = doc.getString("name").orEmpty(),
+                        latitude = doc.getDouble("latitude"),
+                        longitude = doc.getDouble("longitude"),
+                    )
+                }.filter { it.name.isNotBlank() }
         }.onFailure { error ->
-            DebugLog.e("[Firestore][세션저장][실패] ${error.message}", error)
+            DebugLog.e("[Firestore][장소목록][실패] ${error.message}", error)
         }
 
     suspend fun savePlace(request: SavedPlaceRequest): Result<Unit> =
@@ -158,26 +117,14 @@ class FirestoreStudyRepository(
                     .document(uid)
                     .collection("sessions")
             val snapshot =
-                try {
-                    sessionsRef
-                        .whereEqualTo("isDeleted", false)
-                        .orderBy("endedAt", Query.Direction.DESCENDING)
-                        .limit(limit)
-                        .get()
-                        .await()
-                } catch (error: Exception) {
-                    if (!isMissingIndexError(error)) throw error
-                    DebugLog.w("[Firestore][목록조회][인덱스없음] 서버 인덱스 생성 전까지 폴백 쿼리로 조회합니다.")
-                    sessionsRef
-                        .orderBy("endedAt", Query.Direction.DESCENDING)
-                        .limit(limit)
-                        .get()
-                        .await()
-                }
+                sessionsRef
+                    .orderBy("endedAt", Query.Direction.DESCENDING)
+                    .limit(limit)
+                    .get()
+                    .await()
 
             val records =
                 snapshot.documents
-                    .filterNot { doc -> doc.getBoolean("isDeleted") == true }
                     .map { doc ->
                         val placeSnapshot = doc.get("placeSnapshot") as? Map<*, *>
                         StudySessionRecord(
@@ -214,7 +161,7 @@ class FirestoreStudyRepository(
                     .get()
                     .await()
 
-            if (!document.exists() || document.getBoolean("isDeleted") == true) {
+            if (!document.exists()) {
                 error("선택한 세션 기록을 찾을 수 없어요.")
             }
 
@@ -255,25 +202,9 @@ class FirestoreStudyRepository(
                     .collection("sessions")
                     .document(sessionId)
 
-            val snapshot = sessionRef.get().await()
-            if (!snapshot.exists()) {
-                DebugLog.d("[Firestore][삭제][문서없음] uid=${uidForLog(uid)}, sessionId=$sessionId")
-                error("삭제할 기록을 찾을 수 없어요.")
-            }
-            if (snapshot.getBoolean("isDeleted") == true) {
-                DebugLog.d("[Firestore][삭제][이미삭제] uid=${uidForLog(uid)}, sessionId=$sessionId")
-                error("이미 삭제된 기록이에요.")
-            }
-
-            sessionRef
-                .update(
-                    mapOf(
-                        "isDeleted" to true,
-                        "deletedAt" to FieldValue.serverTimestamp(),
-                        "updatedAt" to FieldValue.serverTimestamp(),
-                    ),
-                ).await()
-            DebugLog.d("[Firestore][삭제][소프트삭제성공] uid=${uidForLog(uid)}, sessionId=$sessionId")
+            // 새 계약: soft delete 폐기, 실제 문서를 hard delete 한다.
+            sessionRef.delete().await()
+            DebugLog.d("[Firestore][삭제][hard삭제성공] uid=${uidForLog(uid)}, sessionId=$sessionId")
         }.onFailure { error ->
             DebugLog.e("[Firestore][삭제][실패] sessionId=$sessionId, ${error.message}", error)
         }
@@ -292,8 +223,6 @@ class FirestoreStudyRepository(
         }
     }
 
-    private fun generateSessionId(): String = "${System.currentTimeMillis()}-${(1000..9999).random()}"
-
     private fun buildStablePlaceId(request: SavedPlaceRequest): String {
         val normalizedName = request.name.trim().lowercase(Locale.ROOT)
         val lat = request.latitude?.let { "%.4f".format(Locale.ROOT, it) } ?: "na"
@@ -303,11 +232,4 @@ class FirestoreStudyRepository(
     }
 
     private fun uidForLog(uid: String): String = if (uid.length <= 6) uid else "${uid.take(6)}..."
-
-    private fun isMissingIndexError(error: Throwable): Boolean {
-        val firestoreError = error as? FirebaseFirestoreException ?: return false
-        if (firestoreError.code != FirebaseFirestoreException.Code.FAILED_PRECONDITION) return false
-        val message = firestoreError.message?.lowercase(Locale.ROOT).orEmpty()
-        return message.contains("requires an index") || message.contains("create it here")
-    }
 }

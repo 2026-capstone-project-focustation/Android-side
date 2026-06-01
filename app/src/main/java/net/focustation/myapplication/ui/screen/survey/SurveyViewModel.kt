@@ -8,11 +8,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import net.focustation.myapplication.data.repository.FirestoreSurveyRepository
-import net.focustation.myapplication.data.repository.MlScoreRepository
 import net.focustation.myapplication.survey.SurveyResponse
 import net.focustation.myapplication.survey.SurveyResponseStore
-import net.focustation.myapplication.util.DebugLog
-import kotlin.math.round
 
 data class SurveyOption(
     val value: String,
@@ -36,22 +33,6 @@ data class SurveyUiState(
     val generalDistractions: Set<String> = setOf("noise"),
     val generalPriorities: Set<String> = setOf("quiet"),
     val preferences: Map<String, Int> = defaultPreferenceScores,
-    val placeType: String = "library",
-    val placeName: String = "",
-    val taskType: String = "deep_study",
-    val groupSize: String = "solo",
-    val stayDuration: String = "1_2h",
-    val timeSlot: String = "afternoon",
-    val dayType: String = "weekday",
-    val distanceMinutes: Float = 20f,
-    val weather: String = "clear",
-    val indoorOutdoor: String = "indoor",
-    val visitFrequency: String = "sometimes",
-    val placeRatings: Map<String, Int> = defaultPlaceRatingScores,
-    val labels: Map<String, Int> = defaultLabelScores,
-    val satisfactionScore: Int = 50,
-    val mlScore: Double? = null,
-    val scoreWarningMessage: String? = null,
     val isSaving: Boolean = false,
     val isSubmitted: Boolean = false,
     val errorMessage: String? = null,
@@ -59,7 +40,6 @@ data class SurveyUiState(
 
 class SurveyViewModel(
     private val repository: FirestoreSurveyRepository = FirestoreSurveyRepository(),
-    private val mlScoreRepository: MlScoreRepository = MlScoreRepository(),
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(SurveyUiState())
     val uiState: StateFlow<SurveyUiState> = _uiState.asStateFlow()
@@ -109,99 +89,20 @@ class SurveyViewModel(
         }
     }
 
-    fun setPlaceType(value: String) {
-        _uiState.update { it.copy(placeType = value) }
-    }
-
-    fun setPlaceName(value: String) {
-        _uiState.update { it.copy(placeName = value) }
-    }
-
-    fun setTaskType(value: String) {
-        _uiState.update { it.copy(taskType = value) }
-    }
-
-    fun setGroupSize(value: String) {
-        _uiState.update { it.copy(groupSize = value) }
-    }
-
-    fun setStayDuration(value: String) {
-        _uiState.update { it.copy(stayDuration = value) }
-    }
-
-    fun setTimeSlot(value: String) {
-        _uiState.update { it.copy(timeSlot = value) }
-    }
-
-    fun setDayType(value: String) {
-        _uiState.update { it.copy(dayType = value) }
-    }
-
-    fun setDistanceMinutes(value: Float) {
-        _uiState.update { it.copy(distanceMinutes = value.coerceIn(1f, 40f)) }
-    }
-
-    fun setWeather(value: String) {
-        _uiState.update { it.copy(weather = value) }
-    }
-
-    fun setIndoorOutdoor(value: String) {
-        _uiState.update { it.copy(indoorOutdoor = value) }
-    }
-
-    fun setVisitFrequency(value: String) {
-        _uiState.update { it.copy(visitFrequency = value) }
-    }
-
-    fun setPlaceRating(
-        key: String,
-        value: Int,
-    ) {
-        _uiState.update { state ->
-            state.copy(placeRatings = state.placeRatings.updatedScore(key, value))
-        }
-    }
-
-    fun setLabel(
-        key: String,
-        value: Int,
-    ) {
-        _uiState.update { state ->
-            state.copy(labels = state.labels.updatedScore(key, value))
-        }
-    }
-
-    fun setSatisfactionScore(value: Int) {
-        _uiState.update { it.copy(satisfactionScore = value.coerceIn(1, 100)) }
-    }
-
     fun submit() {
         val state =
             markSavingOrNull()
                 ?: return
 
+        val response = state.toSurveyResponse()
+        SurveyResponseStore.save(response)
+
         viewModelScope.launch {
-            val baseResponse = state.toSurveyResponse()
-            val scoreResult = mlScoreRepository.calculateScore(baseResponse.modelInput)
-            val scoredResponse =
-                baseResponse.copy(
-                    mlScore = scoreResult.getOrNull()?.score,
-                )
-            val scoreWarningMessage =
-                scoreResult.exceptionOrNull()?.let { error ->
-                    DebugLog.w("[Survey][ML점수] 계산 실패: ${error.message}")
-                    "ML 점수는 계산하지 못했지만 설문은 저장했어요. ${error.message.orEmpty()}"
-                }
-
-            SurveyResponseStore.save(scoredResponse)
-
-            val result = repository.saveSurveyResponse(scoredResponse)
+            val result = repository.saveSurveyResponse(response)
             result.fold(
                 onSuccess = {
                     _uiState.update {
                         it.copy(
-                            mlScore = scoredResponse.mlScore,
-                            scoreWarningMessage = scoreWarningMessage,
                             isSaving = false,
                             isSubmitted = true,
                             errorMessage = null,
@@ -211,8 +112,6 @@ class SurveyViewModel(
                 onFailure = { error ->
                     _uiState.update {
                         it.copy(
-                            mlScore = scoredResponse.mlScore,
-                            scoreWarningMessage = scoreWarningMessage,
                             isSaving = false,
                             errorMessage = error.message ?: "설문 저장에 실패했어요.",
                         )
@@ -227,13 +126,7 @@ class SurveyViewModel(
             val state = _uiState.value
             if (state.isSaving) return null
 
-            val savingState =
-                state.copy(
-                    mlScore = null,
-                    scoreWarningMessage = null,
-                    isSaving = true,
-                    errorMessage = null,
-                )
+            val savingState = state.copy(isSaving = true, errorMessage = null)
             if (_uiState.compareAndSet(state, savingState)) return state
         }
     }
@@ -389,8 +282,6 @@ val labelQuestions =
     )
 
 private val defaultPreferenceScores = preferenceQuestions.associate { it.key to 3 }
-private val defaultPlaceRatingScores = placeRatingQuestions.associate { it.key to 3 }
-private val defaultLabelScores = labelQuestions.associate { it.key to 3 }
 
 private fun Set<String>.toggled(value: String): Set<String> =
     if (contains(value)) {
@@ -407,7 +298,7 @@ private fun Map<String, Int>.updatedScore(
 private fun SurveyUiState.toSurveyResponse(): SurveyResponse =
     SurveyResponse(
         modelInput = toModelInputPayload(),
-        labels = toLabelPayload(),
+        labels = emptyMap(),
     )
 
 private fun SurveyUiState.toModelInputPayload(): Map<String, Any> {
@@ -422,62 +313,13 @@ private fun SurveyUiState.toModelInputPayload(): Map<String, Any> {
     payload["general_stay_duration"] = generalStayDuration
     payload["general_time_slot"] = generalTimeSlot
     distractionOptions.forEach { option ->
-        payload["general_distraction_${option.value}"] = if (generalDistractions.contains(option.value)) 1 else 0
+        payload["general_distraction_${option.value}"] =
+            if (generalDistractions.contains(option.value)) 1 else 0
     }
     priorityOptions.forEach { option ->
-        payload["general_priority_${option.value}"] = if (generalPriorities.contains(option.value)) 1 else 0
+        payload["general_priority_${option.value}"] =
+            if (generalPriorities.contains(option.value)) 1 else 0
     }
-
-    payload["place_type"] = placeType
-    payload["place_name"] = placeName.ifBlank { "장소 미지정" }
-    payload["task_type"] = taskType
-    payload["group_size"] = groupSize
-    payload["stay_duration"] = stayDuration
-    payload["time_slot"] = timeSlot
-    payload["day_type"] = dayType
-    payload["distance_minutes"] = distanceMinutes.roundToTenth()
-    payload["weather"] = weather
-    payload["indoor_outdoor"] = indoorOutdoor
-    payload["visit_frequency"] = visitFrequency
-    placeRatings.forEach { (key, value) -> payload[key] = value }
-    payload.putAll(buildDerivedFeatures())
 
     return payload
 }
-
-private fun SurveyUiState.toLabelPayload(): Map<String, Any> =
-    linkedMapOf<String, Any>().apply {
-        labels.forEach { (key, value) -> put(key, value) }
-        put("satisfaction_score", satisfactionScore)
-    }
-
-private fun SurveyUiState.buildDerivedFeatures(): Map<String, Any> {
-    val pref = preferences.withDefault { 3 }
-    val place = placeRatings.withDefault { 3 }
-
-    return linkedMapOf(
-        "quiet_match" to pref.getValue("pref_quiet") * place.getValue("place_quiet"),
-        "light_match" to pref.getValue("pref_light") * place.getValue("place_light"),
-        "crowd_match" to pref.getValue("pref_low_crowd") * place.getValue("place_low_crowd"),
-        "privacy_match" to
-            pref.getValue("pref_privacy") * place.getValue("place_low_visual_distraction"),
-        "outlet_match" to pref.getValue("pref_outlet") * place.getValue("place_outlet"),
-        "thermal_air_match" to
-            pref.getValue("pref_thermal_air") * place.getValue("place_temperature_air"),
-        "control_match" to pref.getValue("pref_control") * place.getValue("place_control"),
-        "comfort_match" to pref.getValue("pref_comfort") * place.getValue("place_comfort"),
-        "deepwork_task_match" to pref.getValue("pref_deepwork") * taskFocusWeight(taskType),
-        "distance_penalty" to (pref.getValue("pref_distance") * distanceMinutes).roundToTenth(),
-        "task_place_fit_match" to place.getValue("place_task_fit"),
-        "time_match" to if (generalTimeSlot == timeSlot) 1 else 0,
-    )
-}
-
-private fun taskFocusWeight(taskType: String): Int =
-    when (taskType) {
-        "deep_study", "coding", "report_writing" -> 5
-        "light_reading", "online_class" -> 3
-        else -> 1
-    }
-
-private fun Float.roundToTenth(): Float = round(this * 10f) / 10f
