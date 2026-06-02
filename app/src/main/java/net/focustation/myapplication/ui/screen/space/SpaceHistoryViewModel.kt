@@ -10,6 +10,7 @@ import net.focustation.myapplication.data.model.SpaceRecord
 import net.focustation.myapplication.data.repository.FirestoreStudyRepository
 import net.focustation.myapplication.data.repository.StudySessionRecord
 import net.focustation.myapplication.util.DebugLog
+import net.focustation.myapplication.util.isPlausibleKoreanCoordinate
 import kotlin.math.roundToInt
 
 enum class SpaceSortOption { DATE, PLACE, SCORE }
@@ -68,7 +69,7 @@ class SpaceHistoryViewModel(
 
 // 위치 정보가 있는 세션 기록을 장소별로 묶어 지도 핀(SpaceRecord)으로 집계한다.
 private fun List<StudySessionRecord>.toSpaceRecords(): List<SpaceRecord> =
-    filter { it.latitude != null && it.longitude != null }
+    filter { isPlausibleKoreanCoordinate(it.latitude, it.longitude) }
         .groupBy { it.placeName }
         .map { (placeName, group) ->
             val recent = group.maxByOrNull { it.endedAtEpochMillis } ?: group.first()

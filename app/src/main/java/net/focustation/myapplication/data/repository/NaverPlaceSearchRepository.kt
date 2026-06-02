@@ -4,6 +4,7 @@ import com.naver.maps.geometry.LatLng
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import net.focustation.myapplication.BuildConfig
+import net.focustation.myapplication.util.isPlausibleKoreanCoordinate
 import org.json.JSONObject
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -100,7 +101,9 @@ class NaverPlaceSearchRepository(
             val mapX = optString("mapx").toDoubleOrNull() ?: return@runCatching null
             val mapY = optString("mapy").toDoubleOrNull() ?: return@runCatching null
             // 네이버 지역 검색 API는 mapx/mapy를 WGS84 경위도 × 10^7 정수로 반환한다.
-            LatLng(mapY / 1e7, mapX / 1e7).takeIf { it.isValid() }
+            LatLng(mapY / 1e7, mapX / 1e7).takeIf {
+                it.isValid() && isPlausibleKoreanCoordinate(it.latitude, it.longitude)
+            }
         }.getOrNull()
 
     private fun String.cleanNaverText(): String =

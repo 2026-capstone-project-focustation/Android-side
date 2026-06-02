@@ -63,6 +63,7 @@ import net.focustation.myapplication.data.repository.SavedPlaceRecord
 import net.focustation.myapplication.data.repository.StudySessionRecord
 import net.focustation.myapplication.ui.components.ReferenceDesignTokens
 import net.focustation.myapplication.ui.theme.FocustationTheme
+import net.focustation.myapplication.util.isPlausibleKoreanCoordinate
 import java.time.Instant
 import java.time.ZoneId
 
@@ -99,7 +100,7 @@ class StartSessionPlaceViewModel(
 // 별도 savedPlaces 컬렉션 대신 세션의 placeSnapshot을 재활용한다(읽기 권한도 세션과 동일).
 private fun List<StudySessionRecord>.toRecentPlaces(): List<SavedPlaceRecord> {
     val latestPerPlace =
-        filter { it.latitude != null && it.longitude != null }
+        filter { isPlausibleKoreanCoordinate(it.latitude, it.longitude) }
             .filter { it.placeName.isNotBlank() && it.placeName != "장소 미지정" }
             .groupBy { it.placeName }
             .map { (_, group) -> group.maxByOrNull { it.endedAtEpochMillis } ?: group.first() }
