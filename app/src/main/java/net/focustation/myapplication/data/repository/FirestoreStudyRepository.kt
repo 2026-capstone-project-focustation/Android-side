@@ -1,23 +1,13 @@
 package net.focustation.myapplication.data.repository
 
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
-import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
 import net.focustation.myapplication.data.model.FocusDataPoint
 import net.focustation.myapplication.data.model.SensorTimelinePoint
 import net.focustation.myapplication.data.model.SensorTimelines
 import net.focustation.myapplication.util.DebugLog
-import java.util.Locale
-import kotlin.math.abs
-
-data class SavedPlaceRequest(
-    val name: String,
-    val latitude: Double? = null,
-    val longitude: Double? = null,
-)
 
 data class SavedPlaceRecord(
     val id: String,
@@ -51,66 +41,6 @@ class FirestoreStudyRepository(
     private val auth by lazy { authProvider() }
 
     // 세션 문서 생성은 Firebase Functions(POST /sessions)가 담당한다. Android는 직접 쓰지 않는다.
-
-    suspend fun getSavedPlaces(limit: Long = 3): Result<List<SavedPlaceRecord>> =
-        runCatching {
-            val uid = auth.currentUser?.uid ?: error("로그인 후 저장된 장소를 불러올 수 있어요.")
-            val snapshot =
-                firestore
-                    .collection("users")
-                    .document(uid)
-                    .collection("savedPlaces")
-                    .orderBy("updatedAt", Query.Direction.DESCENDING)
-                    .limit(limit)
-                    .get()
-                    .await()
-            snapshot.documents
-                .map { doc ->
-                    SavedPlaceRecord(
-                        id = doc.id,
-                        name = doc.getString("name").orEmpty(),
-                        latitude = doc.getDouble("latitude"),
-                        longitude = doc.getDouble("longitude"),
-                        lastUsedMillis = doc.getTimestamp("updatedAt")?.toDate()?.time,
-                    )
-                }.filter { it.name.isNotBlank() }
-        }.onFailure { error ->
-            DebugLog.e("[Firestore][장소목록][실패] ${error.message}", error)
-        }
-
-    suspend fun savePlace(request: SavedPlaceRequest): Result<Unit> =
-        runCatching {
-            val uid = auth.currentUser?.uid ?: error("로그인 후 장소를 저장할 수 있어요.")
-            if (request.name.isBlank()) error("장소 이름이 비어 있어요.")
-            val placeId = buildStablePlaceId(request)
-            val placeRef =
-                firestore
-                    .collection("users")
-                    .document(uid)
-                    .collection("savedPlaces")
-                    .document(placeId)
-            DebugLog.d(
-                "[Firestore][장소저장][요청] uid=${uidForLog(uid)}, placeId=$placeId, name=${request.name}",
-            )
-            val placePayload =
-                hashMapOf(
-                    "name" to request.name,
-                    "latitude" to request.latitude,
-                    "longitude" to request.longitude,
-                    "updatedAt" to FieldValue.serverTimestamp(),
-                )
-            val exists = placeRef.get().await().exists()
-            if (!exists) {
-                placePayload["createdAt"] = FieldValue.serverTimestamp()
-            }
-
-            placeRef
-                .set(placePayload, SetOptions.merge())
-                .await()
-            DebugLog.d("[Firestore][장소저장][성공] uid=${uidForLog(uid)}, placeId=$placeId")
-        }.onFailure { error ->
-            DebugLog.e("[Firestore][장소저장][실패] ${error.message}", error)
-        }
 
     suspend fun getStudySessions(limit: Long = 50): Result<List<StudySessionRecord>> =
         runCatching {
@@ -271,14 +201,6 @@ class FirestoreStudyRepository(
     }
 
     private fun SensorTimelines.totalCount(): Int = noise.size + light.size + vibration.size
-
-    private fun buildStablePlaceId(request: SavedPlaceRequest): String {
-        val normalizedName = request.name.trim().lowercase(Locale.ROOT)
-        val lat = request.latitude?.let { "%.4f".format(Locale.ROOT, it) } ?: "na"
-        val lon = request.longitude?.let { "%.4f".format(Locale.ROOT, it) } ?: "na"
-        val raw = "$normalizedName|$lat|$lon"
-        return "place_${abs(raw.hashCode().toLong())}"
-    }
 
     private fun uidForLog(uid: String): String = if (uid.length <= 6) uid else "${uid.take(6)}..."
 }

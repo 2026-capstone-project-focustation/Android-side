@@ -14,10 +14,8 @@ import net.focustation.myapplication.data.model.EnvironmentSnapshot
 import net.focustation.myapplication.data.model.SensorTimelinePoint
 import net.focustation.myapplication.data.model.SensorTimelines
 import net.focustation.myapplication.data.repository.CreateSessionRequest
-import net.focustation.myapplication.data.repository.FirestoreStudyRepository
 import net.focustation.myapplication.data.repository.FirestoreSurveyRepository
 import net.focustation.myapplication.data.repository.PlaceSnapshotPayload
-import net.focustation.myapplication.data.repository.SavedPlaceRequest
 import net.focustation.myapplication.data.repository.SessionApiRepository
 import net.focustation.myapplication.sensor.LightSensorManager
 import net.focustation.myapplication.sensor.NoiseSensorManager
@@ -542,7 +540,6 @@ private val defaultPlaceFeedbackRatings: Map<String, Int> = placeRatingQuestions
 
 class FeedbackSessionViewModel(
     private val sessionApi: SessionApiRepository = SessionApiRepository(),
-    private val studyRepository: FirestoreStudyRepository = FirestoreStudyRepository(),
     private val surveyRepository: FirestoreSurveyRepository = FirestoreSurveyRepository(),
 ) : androidx.lifecycle.ViewModel() {
     private val _uiState = MutableStateFlow(seedInitialState())
@@ -615,8 +612,6 @@ class FeedbackSessionViewModel(
             val created = result.getOrNull()
             if (created != null) {
                 DebugLog.d("[Feedback][Save] 성공 sessionId=${created.sessionId}, mlScore=${created.mlScore}")
-                // 사용한 장소를 savedPlaces에 남겨 다음 세션의 '최근 공간'으로 노출한다.
-                persistPlaceIfNeeded(draft)
                 SessionReportDraftStore.clearIfCurrent(draft)
                 _uiState.update {
                     it.copy(isSaving = false, saveErrorMessage = null, submitted = true)
@@ -641,18 +636,6 @@ class FeedbackSessionViewModel(
         return surveyRepository
             .loadLatestModelInput()
             .getOrElse { emptyMap() }
-    }
-
-    private suspend fun persistPlaceIfNeeded(draft: SessionReportDraft) {
-        val name = draft.placeName.trim()
-        val lat = draft.placeLatitude
-        val lng = draft.placeLongitude
-        if (name.isBlank() || name == "장소 미지정" || lat == null || lng == null) return
-        studyRepository
-            .savePlace(SavedPlaceRequest(name = name, latitude = lat, longitude = lng))
-            .onFailure { error ->
-                DebugLog.e("[Feedback][장소저장] 실패: ${error.message}", error)
-            }
     }
 
     private fun buildRequest(
