@@ -24,6 +24,7 @@ data class SavedPlaceRecord(
     val name: String,
     val latitude: Double? = null,
     val longitude: Double? = null,
+    val lastUsedMillis: Long? = null,
 )
 
 data class StudySessionRecord(
@@ -70,6 +71,7 @@ class FirestoreStudyRepository(
                         name = doc.getString("name").orEmpty(),
                         latitude = doc.getDouble("latitude"),
                         longitude = doc.getDouble("longitude"),
+                        lastUsedMillis = doc.getTimestamp("updatedAt")?.toDate()?.time,
                     )
                 }.filter { it.name.isNotBlank() }
         }.onFailure { error ->
