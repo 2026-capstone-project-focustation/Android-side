@@ -66,6 +66,13 @@ data class CreateSessionResult(
     val mlScore: Double,
 )
 
+data class CreateSessionPredictionResult(
+    val mlScore: Double,
+    val avgNoise: Double,
+    val avgIlluminance: Double,
+    val avgVibration: Double,
+)
+
 /**
  * Firebase Functions `POST /sessions` 클라이언트.
  * Android가 v2 `modelInput`을 함께 보내고, Functions가 ML 호출과 Firestore 세션 문서 생성을 담당한다.
@@ -134,6 +141,65 @@ class SessionApiRepository(
         }.onFailure { error ->
             if (error is CancellationException) throw error
             DebugLog.e("[SessionApi][POST] 실패: ${error.message}", error)
+        }
+
+    suspend fun predictSession(request: CreateSessionRequest): Result<CreateSessionPredictionResult> =
+        runCatching {
+            if (baseUrl.isBlank()) error("FUNCTIONS_BASE_URL이 설정되지 않았어요.")
+            val token =
+                authProvider()
+                    .currentUser
+                    ?.getIdToken(false)
+                    ?.await()
+                    ?.token
+                    ?: error("로그인 후 환경 예측을 만들 수 있어요.")
+
+            withContext(Dispatchers.IO) {
+                val endpoint = "${baseUrl.trimEnd('/')}/sessionPrediction"
+                val connection = URI.create(endpoint).toURL().openConnection() as HttpURLConnection
+                try {
+                    val body = request.toJson().toString()
+                    connection.requestMethod = "POST"
+                    connection.connectTimeout = 15_000
+                    connection.readTimeout = 15_000
+                    connection.doOutput = true
+                    connection.setRequestProperty("Accept", "application/json")
+                    connection.setRequestProperty("Content-Type", "application/json")
+                    connection.setRequestProperty("Authorization", "Bearer $token")
+
+                    connection.outputStream.use { output ->
+                        output.write(body.toByteArray(Charsets.UTF_8))
+                    }
+
+                    val responseCode = connection.responseCode
+                    val responseBody =
+                        if (responseCode in 200..299) {
+                            connection.inputStream.bufferedReader().use { it.readText() }
+                        } else {
+                            connection.errorStream
+                                ?.bufferedReader()
+                                ?.use { it.readText() }
+                                .orEmpty()
+                        }
+
+                    if (responseCode !in 200..299) {
+                        throw IOException(messageForError(responseCode, responseBody))
+                    }
+
+                    val json = JSONObject(responseBody)
+                    CreateSessionPredictionResult(
+                        mlScore = json.optDouble("mlScore", -1.0),
+                        avgNoise = json.optDouble("avgNoise", request.avgNoise),
+                        avgIlluminance = json.optDouble("avgIlluminance", request.avgIlluminance),
+                        avgVibration = json.optDouble("avgVibration", request.avgVibration),
+                    )
+                } finally {
+                    connection.disconnect()
+                }
+            }
+        }.onFailure { error ->
+            if (error is CancellationException) throw error
+            DebugLog.e("[SessionApi][Prediction] 실패: ${error.message}", error)
         }
 
     private fun messageForError(

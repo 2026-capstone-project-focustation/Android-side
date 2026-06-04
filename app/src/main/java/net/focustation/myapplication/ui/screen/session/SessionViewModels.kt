@@ -11,12 +11,14 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import net.focustation.myapplication.data.model.EnvironmentSnapshot
+import net.focustation.myapplication.data.model.FocusDataPoint
 import net.focustation.myapplication.data.model.SensorTimelinePoint
 import net.focustation.myapplication.data.model.SensorTimelines
 import net.focustation.myapplication.data.repository.CreateSessionRequest
 import net.focustation.myapplication.data.repository.FirestoreSurveyRepository
 import net.focustation.myapplication.data.repository.PlaceSnapshotPayload
 import net.focustation.myapplication.data.repository.SessionApiRepository
+import net.focustation.myapplication.score.ScoreCalculator
 import net.focustation.myapplication.sensor.LightSensorManager
 import net.focustation.myapplication.sensor.NoiseSensorManager
 import net.focustation.myapplication.sensor.VibrationSensorManager
@@ -36,6 +38,9 @@ data class EnvironmentSessionUiState(
     val isRunning: Boolean = false,
     val isPaused: Boolean = false,
     val isCompleted: Boolean = false,
+    val isPredicting: Boolean = false,
+    val predictionScore: Int? = null,
+    val predictionErrorMessage: String? = null,
     val elapsedSeconds: Int = 0,
     val totalSessionSeconds: Int = 300, // 5분
     val noiseHistory: List<Float> = emptyList(),
@@ -50,6 +55,8 @@ class EnvironmentSessionViewModel(
     private val lightManager = LightSensorManager(app)
     private val noiseManager = NoiseSensorManager()
     private val vibrationManager = VibrationSensorManager(app)
+    private val sessionApi = SessionApiRepository()
+    private val surveyRepository = FirestoreSurveyRepository()
 
     private val _uiState = MutableStateFlow(EnvironmentSessionUiState())
     val uiState: StateFlow<EnvironmentSessionUiState> = _uiState.asStateFlow()
@@ -62,6 +69,9 @@ class EnvironmentSessionViewModel(
     private val lightBuf = ArrayDeque<Float>()
     private val noiseBuf = ArrayDeque<Double>()
     private val vibBuf = ArrayDeque<Double>()
+    private val lightSamples = mutableListOf<Float>()
+    private val noiseSamples = mutableListOf<Double>()
+    private val vibrationSamples = mutableListOf<Double>()
 
     companion object {
         private const val WINDOW = 30
@@ -74,6 +84,7 @@ class EnvironmentSessionViewModel(
                 if (!_uiState.value.isRunning) return@collect
                 lightBuf.addLast(lux)
                 if (lightBuf.size > WINDOW) lightBuf.removeFirst()
+                lightSamples += lux
                 recalculate()
             }
         }
@@ -82,6 +93,7 @@ class EnvironmentSessionViewModel(
                 if (!_uiState.value.isRunning) return@collect
                 vibBuf.addLast(m)
                 if (vibBuf.size > WINDOW) vibBuf.removeFirst()
+                vibrationSamples += m
                 recalculate()
             }
         }
@@ -104,6 +116,7 @@ class EnvironmentSessionViewModel(
                     if (!_uiState.value.isRunning) return@collect
                     noiseBuf.addLast(db)
                     if (noiseBuf.size > WINDOW) noiseBuf.removeFirst()
+                    noiseSamples += db
                     recalculate()
                 }
             }
@@ -150,6 +163,9 @@ class EnvironmentSessionViewModel(
                     isRunning = true,
                     isPaused = false,
                     isCompleted = false,
+                    isPredicting = false,
+                    predictionScore = null,
+                    predictionErrorMessage = null,
                     elapsedSeconds = 0,
                     noiseHistory = emptyList(),
                     lightHistory = emptyList(),
@@ -172,15 +188,20 @@ class EnvironmentSessionViewModel(
     }
 
     fun completeSession() {
+        if (_uiState.value.isCompleted) return
         timerJob?.cancel()
         _uiState.update {
             it.copy(
                 isRunning = false,
                 isPaused = false,
                 isCompleted = true,
+                isPredicting = true,
+                predictionScore = null,
+                predictionErrorMessage = null,
                 elapsedSeconds = it.elapsedSeconds.coerceAtMost(it.totalSessionSeconds),
             )
         }
+        requestSessionPrediction()
     }
 
     /**
@@ -203,7 +224,88 @@ class EnvironmentSessionViewModel(
         lightBuf.clear()
         noiseBuf.clear()
         vibBuf.clear()
+        lightSamples.clear()
+        noiseSamples.clear()
+        vibrationSamples.clear()
         _uiState.update { EnvironmentSessionUiState() }
+    }
+
+    private fun requestSessionPrediction() {
+        viewModelScope.launch {
+            val state = _uiState.value
+            val request = buildPredictionRequest(state)
+            sessionApi.predictSession(request).fold(
+                onSuccess = { prediction ->
+                    _uiState.update {
+                        it.copy(
+                            isPredicting = false,
+                            predictionScore = prediction.mlScore.toInt().coerceIn(0, 100),
+                            predictionErrorMessage = null,
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    _uiState.update {
+                        it.copy(
+                            isPredicting = false,
+                            predictionScore = null,
+                            predictionErrorMessage = error.message ?: "환경 예측 점수를 만들지 못했어요.",
+                        )
+                    }
+                },
+            )
+        }
+    }
+
+    private suspend fun buildPredictionRequest(state: EnvironmentSessionUiState): CreateSessionRequest {
+        val surveyModelInput =
+            SurveyResponseStore.latest()?.modelInput
+                ?: surveyRepository.loadLatestModelInput().getOrElse { emptyMap() }
+        val sensorSummary =
+            buildSensorSummaryPayload(
+                noiseSamples = noiseSamples.toList(),
+                lightSamples = lightSamples.toList(),
+                vibrationSamples = vibrationSamples.toList(),
+                measurementDurationSec = state.elapsedSeconds,
+            )
+        val avgEnvironmentScore =
+            calculateOnDeviceEnvironmentScore(
+                noiseSamples = noiseSamples.toList(),
+                lightSamples = lightSamples.toList(),
+                vibrationSamples = vibrationSamples.toList(),
+            )
+        val endTime = LocalDateTime.now()
+        val placeFeedback = buildDefaultPredictionPlaceFeedback(state.elapsedSeconds, endTime)
+        val modelInput =
+            buildSensorTargetV2ModelInput(
+                surveyModelInput = surveyModelInput,
+                placeFeedback = placeFeedback,
+                sensorSummary = sensorSummary,
+            )
+
+        return CreateSessionRequest(
+            durationSec = state.elapsedSeconds,
+            avgEnvironmentScore = avgEnvironmentScore,
+            avgNoise = sensorSummary.noiseMeanDb,
+            avgIlluminance = sensorSummary.lightMeanLux,
+            avgVibration = sensorSummary.vibrationMean,
+            focusTimeline = listOf(FocusDataPoint("측정", avgEnvironmentScore.toFloat())),
+            sensorTimelines =
+                SensorTimelines(
+                    noise = buildSensorTimelinePoints(noiseSamples.map { it.toFloat() }, state.elapsedSeconds),
+                    light = buildSensorTimelinePoints(lightSamples, state.elapsedSeconds),
+                    vibration = buildSensorTimelinePoints(vibrationSamples.map { it.toFloat() }, state.elapsedSeconds),
+                ),
+            placeSnapshot =
+                PlaceSnapshotPayload(
+                    name = "현재 공간",
+                    latitude = null,
+                    longitude = null,
+                ),
+            placeFeedback = placeFeedback,
+            sensorSummary = sensorSummary,
+            modelInput = modelInput,
+        )
     }
 
     /**
@@ -516,6 +618,86 @@ class FocusSessionViewModel(
         noiseJob?.cancel()
     }
 }
+
+private fun buildDefaultPredictionPlaceFeedback(
+    elapsedSeconds: Int,
+    endTime: LocalDateTime,
+): Map<String, Any> {
+    val placeFeedback =
+        linkedMapOf<String, Any>(
+            "place_type" to "cafe",
+            "task_type" to "deep_study",
+            "group_size" to "solo",
+            "stay_duration" to stayDurationForMinutes(elapsedSeconds / 60),
+            "time_slot" to timeSlotForHour(endTime.hour),
+            "day_type" to dayTypeForDayOfWeek(endTime.dayOfWeek),
+            "distance_minutes" to 10.0,
+            "weather" to "clear",
+            "indoor_outdoor" to "indoor",
+            "visit_frequency" to "first_time",
+        )
+    placeRatingQuestions.forEach { question ->
+        placeFeedback[question.key] = 3
+    }
+    return placeFeedback
+}
+
+private fun calculateOnDeviceEnvironmentScore(
+    noiseSamples: List<Double>,
+    lightSamples: List<Float>,
+    vibrationSamples: List<Double>,
+): Double {
+    val scores =
+        listOfNotNull(
+            lightSamples
+                .takeIf { it.isNotEmpty() }
+                ?.let { ScoreCalculator.calculateLightScore(it) },
+            noiseSamples
+                .takeIf { it.isNotEmpty() }
+                ?.let { ScoreCalculator.calculateNoiseScore(it) },
+            vibrationSamples
+                .takeIf { it.isNotEmpty() }
+                ?.let { ScoreCalculator.calculateVibrationScore(it) },
+        )
+    return ScoreCalculator.calculateTotalScore(scores)
+}
+
+private fun buildSensorTimelinePoints(
+    samples: List<Float>,
+    elapsedSeconds: Int,
+    maxPoints: Int = 24,
+): List<SensorTimelinePoint> {
+    if (samples.isEmpty()) return emptyList()
+
+    val pointCount = samples.size.coerceAtMost(maxPoints)
+    val lastIndex = samples.lastIndex
+    val safeElapsedSeconds = elapsedSeconds.coerceAtLeast(0)
+    return List(pointCount) { index ->
+        val sampleIndex =
+            if (pointCount == 1) {
+                0
+            } else {
+                index * lastIndex / (pointCount - 1)
+            }
+        val seconds =
+            if (pointCount == 1) {
+                safeElapsedSeconds
+            } else {
+                index * safeElapsedSeconds / (pointCount - 1)
+            }
+        SensorTimelinePoint(
+            timeLabel = formatSensorTimelineLabel(seconds),
+            value = samples[sampleIndex].coerceAtLeast(0f),
+        )
+    }
+}
+
+private fun formatSensorTimelineLabel(seconds: Int): String =
+    if (seconds < 60) {
+        "${seconds}초"
+    } else {
+        "${seconds / 60}분"
+    }
 
 private fun emptyEnvironmentSnapshot(): EnvironmentSnapshot =
     EnvironmentSnapshot(

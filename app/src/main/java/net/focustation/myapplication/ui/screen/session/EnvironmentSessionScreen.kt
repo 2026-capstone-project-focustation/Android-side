@@ -36,6 +36,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -63,7 +64,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
-import net.focustation.myapplication.score.ScoreCalculator
 import net.focustation.myapplication.ui.components.MiniLineGraph
 import net.focustation.myapplication.ui.components.ReferenceDesignTokens
 import net.focustation.myapplication.ui.theme.ColorLight
@@ -181,12 +181,9 @@ private fun EnvironmentSessionContent(
             EnvironmentTopBar(onBack = onBack)
             if (uiState.isCompleted) {
                 EnvironmentResultPanel(
-                    score =
-                        calculateEnvironmentScore(
-                            noise = uiState.currentSnapshot.noiseLevel,
-                            illuminance = uiState.currentSnapshot.illuminance,
-                            vibration = uiState.currentSnapshot.vibration,
-                        ),
+                    score = uiState.predictionScore,
+                    isLoading = uiState.isPredicting,
+                    errorMessage = uiState.predictionErrorMessage,
                     onRetry = onRetry,
                     onContinue = onContinue,
                 )
@@ -424,7 +421,9 @@ private fun EnvironmentMetricGrid(
 
 @Composable
 private fun EnvironmentResultPanel(
-    score: Int,
+    score: Int?,
+    isLoading: Boolean,
+    errorMessage: String?,
     onRetry: () -> Unit,
     onContinue: () -> Unit,
 ) {
@@ -450,11 +449,15 @@ private fun EnvironmentResultPanel(
                         .background(ReferenceDesignTokens.Yellow),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    text = score.toString(),
-                    color = ReferenceDesignTokens.TextPrimary,
-                    style = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.Black),
-                )
+                if (isLoading) {
+                    CircularProgressIndicator(color = ReferenceDesignTokens.TextPrimary)
+                } else {
+                    Text(
+                        text = score?.toString() ?: "--",
+                        color = ReferenceDesignTokens.TextPrimary,
+                        style = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.Black),
+                    )
+                }
             }
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -466,12 +469,17 @@ private fun EnvironmentResultPanel(
                     style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
                 )
                 Text(
-                    text = environmentScoreLabel(score),
+                    text =
+                        when {
+                            isLoading -> "ML 예측 점수를 계산하는 중이에요"
+                            errorMessage != null -> "예측 점수를 만들지 못했어요"
+                            else -> environmentScoreLabel(score)
+                        },
                     color = Color.White.copy(alpha = 0.76f),
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Text(
-                    text = "소음, 조도, 진동 측정값으로 계산한 온디바이스 점수예요.",
+                    text = errorMessage ?: "측정값과 설문 응답을 바탕으로 예측한 ML 점수예요.",
                     color = Color.White.copy(alpha = 0.58f),
                     style = MaterialTheme.typography.labelSmall,
                     textAlign = TextAlign.Center,
@@ -492,6 +500,7 @@ private fun EnvironmentResultPanel(
                 }
                 Button(
                     onClick = onContinue,
+                    enabled = !isLoading,
                     modifier = Modifier.weight(1f).height(56.dp),
                     shape = RoundedCornerShape(18.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = ReferenceDesignTokens.Yellow),
@@ -760,32 +769,9 @@ private fun sensorGraphStatusLabel(uiState: EnvironmentSessionUiState): String =
         else -> "측정을 시작하면 그래프가 표시돼요"
     }
 
-private fun calculateEnvironmentScore(
-    noise: Float,
-    illuminance: Float,
-    vibration: Double,
-): Int {
-    val scores =
-        listOfNotNull(
-            illuminance
-                .takeIf { it > 0f }
-                ?.let { ScoreCalculator.calculateLightScore(listOf(it)) },
-            noise
-                .takeIf { it > 0f }
-                ?.let { ScoreCalculator.calculateNoiseScore(listOf(it.toDouble())) },
-            vibration
-                .takeIf { it > 0.0 }
-                ?.let { ScoreCalculator.calculateVibrationScore(listOf(it)) },
-        )
-
-    return ScoreCalculator
-        .calculateTotalScore(scores)
-        .toInt()
-        .coerceIn(0, 100)
-}
-
-private fun environmentScoreLabel(score: Int): String =
+private fun environmentScoreLabel(score: Int?): String =
     when {
+        score == null -> "예측 점수 대기 중"
         score >= 80 -> "집중하기 좋은 환경이에요"
         score >= 60 -> "무난한 집중 환경이에요"
         score > 0 -> "집중 전 조정이 필요해요"
