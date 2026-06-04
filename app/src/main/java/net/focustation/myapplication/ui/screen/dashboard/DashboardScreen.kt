@@ -1,6 +1,7 @@
 package net.focustation.myapplication.ui.screen.dashboard
 
 import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -58,6 +59,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import net.focustation.myapplication.score.ScoreCalculator
 import net.focustation.myapplication.ui.components.FocusScreenBackground
@@ -95,11 +97,23 @@ fun DashboardScreen(
     val permissionLauncher =
         rememberLauncherForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions(),
-        ) {}
+        ) { result ->
+            viewModel.startRealtimeEnvironmentMonitoring(
+                hasNoisePermission = result[Manifest.permission.RECORD_AUDIO] == true,
+            )
+        }
     LaunchedEffect(Unit) {
         if (!onboardingStore.permissionsRequested()) {
             onboardingStore.markPermissionsRequested()
             permissionLauncher.launch(firstLaunchPermissions())
+        } else {
+            viewModel.startRealtimeEnvironmentMonitoring(
+                hasNoisePermission =
+                    ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.RECORD_AUDIO,
+                    ) == PackageManager.PERMISSION_GRANTED,
+            )
         }
     }
 
@@ -175,7 +189,7 @@ fun DashboardScreen(
 
                 item {
                     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                        SectionHeader(title = "지금 공간 상태", subtitle = "측정 시작 후 표시")
+                        SectionHeader(title = "지금 공간 상태", subtitle = "실시간 측정")
                         Spacer(Modifier.height(18.dp))
                         DashboardEnvironmentSummary(
                             hasData = uiState.hasEnvironmentSnapshot,

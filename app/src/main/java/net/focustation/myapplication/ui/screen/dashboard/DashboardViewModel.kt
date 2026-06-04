@@ -1,8 +1,10 @@
 package net.focustation.myapplication.ui.screen.dashboard
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -13,6 +15,9 @@ import net.focustation.myapplication.data.model.SessionSummary
 import net.focustation.myapplication.data.model.User
 import net.focustation.myapplication.data.repository.FirestoreStudyRepository
 import net.focustation.myapplication.data.repository.StudySessionRecord
+import net.focustation.myapplication.sensor.LightSensorManager
+import net.focustation.myapplication.sensor.NoiseSensorManager
+import net.focustation.myapplication.sensor.VibrationSensorManager
 import net.focustation.myapplication.util.DebugLog
 import java.time.Instant
 import java.time.LocalDate
@@ -38,16 +43,53 @@ data class DashboardUiState(
 )
 
 class DashboardViewModel(
+    app: Application,
     private val repository: FirestoreStudyRepository = FirestoreStudyRepository(),
     private val authProvider: () -> FirebaseAuth = { FirebaseAuth.getInstance() },
-) : ViewModel() {
+) : AndroidViewModel(app) {
     private val auth by lazy { authProvider() }
+    private val lightManager = LightSensorManager(app)
+    private val noiseManager = NoiseSensorManager()
+    private val vibrationManager = VibrationSensorManager(app)
 
     private val _uiState = MutableStateFlow(DashboardUiState())
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
 
+    private var lightJob: Job? = null
+    private var noiseJob: Job? = null
+    private var vibrationJob: Job? = null
+
     init {
         refresh()
+    }
+
+    fun startRealtimeEnvironmentMonitoring(hasNoisePermission: Boolean) {
+        if (lightJob == null) {
+            lightJob =
+                viewModelScope.launch {
+                    lightManager.getLightFlow().collect { lux ->
+                        updateEnvironmentSnapshot(illuminance = lux)
+                    }
+                }
+        }
+
+        if (vibrationJob == null) {
+            vibrationJob =
+                viewModelScope.launch {
+                    vibrationManager.getVibrationFlow().collect { vibration ->
+                        updateEnvironmentSnapshot(vibration = vibration)
+                    }
+                }
+        }
+
+        if (hasNoisePermission && noiseJob == null) {
+            noiseJob =
+                viewModelScope.launch {
+                    noiseManager.getNoiseFlow().collect { db ->
+                        updateEnvironmentSnapshot(noise = db.toFloat())
+                    }
+                }
+        }
     }
 
     fun refresh() {
@@ -95,9 +137,9 @@ class DashboardViewModel(
 
                     val snapshot =
                         EnvironmentSnapshot(
-                            noiseLevel = 0f,
-                            illuminance = 0f,
-                            vibration = 0.0,
+                            noiseLevel = _uiState.value.environmentSnapshot.noiseLevel,
+                            illuminance = _uiState.value.environmentSnapshot.illuminance,
+                            vibration = _uiState.value.environmentSnapshot.vibration,
                         )
 
                     DebugLog.d(
@@ -109,7 +151,7 @@ class DashboardViewModel(
                             todayAvgFocus = todayAvgFocus,
                             todayWorkMinutes = todayWorkMinutes,
                             hasTodaySessions = todayRecords.isNotEmpty(),
-                            hasEnvironmentSnapshot = false,
+                            hasEnvironmentSnapshot = snapshot.hasAnyReading(),
                             environmentSnapshot = snapshot,
                             recentSessions = recentTop3,
                             isLoading = false,
@@ -130,6 +172,25 @@ class DashboardViewModel(
                         )
                     }
                 },
+            )
+        }
+    }
+
+    private fun updateEnvironmentSnapshot(
+        noise: Float? = null,
+        illuminance: Float? = null,
+        vibration: Double? = null,
+    ) {
+        _uiState.update { state ->
+            val nextSnapshot =
+                state.environmentSnapshot.copy(
+                    noiseLevel = noise ?: state.environmentSnapshot.noiseLevel,
+                    illuminance = illuminance ?: state.environmentSnapshot.illuminance,
+                    vibration = vibration ?: state.environmentSnapshot.vibration,
+                )
+            state.copy(
+                hasEnvironmentSnapshot = nextSnapshot.hasAnyReading(),
+                environmentSnapshot = nextSnapshot,
             )
         }
     }
@@ -168,3 +229,5 @@ class DashboardViewModel(
         }
     }
 }
+
+private fun EnvironmentSnapshot.hasAnyReading(): Boolean = noiseLevel > 0f || illuminance > 0f || vibration > 0.0
