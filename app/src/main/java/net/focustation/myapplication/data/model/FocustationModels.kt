@@ -7,8 +7,8 @@ data class User(
 )
 
 data class EnvironmentSnapshot(
-    val noiseLevel: Float = 35f, // dB
-    val illuminance: Float = 420f, // lux
+    val noiseLevel: Float = 0f, // dB
+    val illuminance: Float = 0f, // lux
     val vibration: Double = 0.0, // m/s²
 )
 

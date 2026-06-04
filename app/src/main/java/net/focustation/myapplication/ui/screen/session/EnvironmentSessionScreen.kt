@@ -36,6 +36,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -178,50 +179,60 @@ private fun EnvironmentSessionContent(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             EnvironmentTopBar(onBack = onBack)
-            EnvironmentTimerCard(
-                remainingSeconds = remaining,
-                progress = progress,
-                isRunning = uiState.isRunning,
-                isPaused = uiState.isPaused,
-                isCompleted = uiState.isCompleted,
-            )
-            EnvironmentMetricGrid(
-                noise = uiState.currentSnapshot.noiseLevel,
-                illuminance = uiState.currentSnapshot.illuminance,
-                vibration = uiState.currentSnapshot.vibration,
-            )
-            EnvironmentSensorGraphCard(
-                title = "소음 추이",
-                history = uiState.noiseHistory,
-                lineColor = ColorNoise,
-                minValue = 20f,
-                maxValue = 90f,
-            )
-            EnvironmentSensorGraphCard(
-                title = "조도 추이",
-                history = uiState.lightHistory,
-                lineColor = ColorLight,
-                minValue = 0f,
-                maxValue = 1000f,
-            )
-            EnvironmentSensorGraphCard(
-                title = "진동 추이",
-                history = uiState.vibrationHistory,
-                lineColor = ColorVibration,
-                minValue = 0f,
-                maxValue = 0.2f,
-            )
-            EnvironmentControlButtons(
-                isRunning = uiState.isRunning,
-                isPaused = uiState.isPaused,
-                isCompleted = uiState.isCompleted,
-                onStart = onStart,
-                onPause = onPause,
-                onResume = onResume,
-                onFinish = onFinish,
-                onRetry = onRetry,
-                onContinue = onContinue,
-            )
+            if (uiState.isCompleted) {
+                EnvironmentResultPanel(
+                    score = uiState.predictionScore,
+                    isLoading = uiState.isPredicting,
+                    errorMessage = uiState.predictionErrorMessage,
+                    onRetry = onRetry,
+                    onContinue = onContinue,
+                )
+            } else {
+                EnvironmentTimerCard(
+                    remainingSeconds = remaining,
+                    progress = progress,
+                    isRunning = uiState.isRunning,
+                    isPaused = uiState.isPaused,
+                    isCompleted = uiState.isCompleted,
+                )
+                EnvironmentControlButtons(
+                    isRunning = uiState.isRunning,
+                    isPaused = uiState.isPaused,
+                    onStart = onStart,
+                    onPause = onPause,
+                    onResume = onResume,
+                    onFinish = onFinish,
+                )
+                EnvironmentMetricGrid(
+                    noise = uiState.currentSnapshot.noiseLevel,
+                    illuminance = uiState.currentSnapshot.illuminance,
+                    vibration = uiState.currentSnapshot.vibration,
+                )
+                EnvironmentSensorGraphCard(
+                    title = "소음 추이",
+                    history = uiState.noiseHistory,
+                    statusText = sensorGraphStatusLabel(uiState),
+                    lineColor = ColorNoise,
+                    minValue = 20f,
+                    maxValue = 90f,
+                )
+                EnvironmentSensorGraphCard(
+                    title = "조도 추이",
+                    history = uiState.lightHistory,
+                    statusText = sensorGraphStatusLabel(uiState),
+                    lineColor = ColorLight,
+                    minValue = 0f,
+                    maxValue = 1000f,
+                )
+                EnvironmentSensorGraphCard(
+                    title = "진동 추이",
+                    history = uiState.vibrationHistory,
+                    statusText = sensorGraphStatusLabel(uiState),
+                    lineColor = ColorVibration,
+                    minValue = 0f,
+                    maxValue = 0.2f,
+                )
+            }
         }
     }
 }
@@ -409,6 +420,101 @@ private fun EnvironmentMetricGrid(
 }
 
 @Composable
+private fun EnvironmentResultPanel(
+    score: Int?,
+    isLoading: Boolean,
+    errorMessage: String?,
+    onRetry: () -> Unit,
+    onContinue: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(ReferenceDesignTokens.PhoneRadius),
+        color = ReferenceDesignTokens.Dark,
+        shadowElevation = 0.dp,
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 22.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Box(
+                modifier =
+                    Modifier
+                        .size(132.dp)
+                        .clip(CircleShape)
+                        .background(ReferenceDesignTokens.Yellow),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(color = ReferenceDesignTokens.TextPrimary)
+                } else {
+                    Text(
+                        text = score?.toString() ?: "--",
+                        color = ReferenceDesignTokens.TextPrimary,
+                        style = MaterialTheme.typography.displayLarge.copy(fontWeight = FontWeight.Black),
+                    )
+                }
+            }
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    text = "환경 적합도",
+                    color = Color.White,
+                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
+                )
+                Text(
+                    text =
+                        when {
+                            isLoading -> "ML 예측 점수를 계산하는 중이에요"
+                            errorMessage != null -> "예측 점수를 만들지 못했어요"
+                            else -> environmentScoreLabel(score)
+                        },
+                    color = Color.White.copy(alpha = 0.76f),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text = errorMessage ?: "측정값과 설문 응답을 바탕으로 예측한 ML 점수예요.",
+                    color = Color.White.copy(alpha = 0.58f),
+                    style = MaterialTheme.typography.labelSmall,
+                    textAlign = TextAlign.Center,
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                OutlinedButton(
+                    onClick = onRetry,
+                    modifier = Modifier.weight(1f).height(56.dp),
+                    shape = RoundedCornerShape(18.dp),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.24f)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                ) {
+                    Text("다시 측정", fontWeight = FontWeight.Bold)
+                }
+                Button(
+                    onClick = onContinue,
+                    enabled = !isLoading,
+                    modifier = Modifier.weight(1f).height(56.dp),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ReferenceDesignTokens.Yellow),
+                ) {
+                    Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("집중 시작", fontWeight = FontWeight.ExtraBold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun EnvironmentMetricCard(
     label: String,
     value: String,
@@ -474,6 +580,7 @@ private fun EnvironmentMetricCard(
 private fun EnvironmentSensorGraphCard(
     title: String,
     history: List<Float>,
+    statusText: String,
     lineColor: Color,
     minValue: Float,
     maxValue: Float,
@@ -501,16 +608,11 @@ private fun EnvironmentSensorGraphCard(
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
                     )
                     Text(
-                        text = "측정 중 실시간으로 업데이트돼요",
+                        text = statusText,
                         color = ReferenceDesignTokens.TextSecondary,
                         style = MaterialTheme.typography.labelSmall,
                     )
                 }
-                Text(
-                    text = "${history.size}개",
-                    color = ReferenceDesignTokens.Blue,
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                )
             }
             if (history.size >= 2) {
                 MiniLineGraph(
@@ -549,13 +651,10 @@ private fun EnvironmentSensorGraphCard(
 private fun EnvironmentControlButtons(
     isRunning: Boolean,
     isPaused: Boolean,
-    isCompleted: Boolean,
     onStart: () -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
     onFinish: () -> Unit,
-    onRetry: () -> Unit,
-    onContinue: () -> Unit,
 ) {
     Row(
         modifier =
@@ -565,37 +664,6 @@ private fun EnvironmentControlButtons(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         when {
-            isCompleted -> {
-                OutlinedButton(
-                    onClick = onRetry,
-                    modifier =
-                        Modifier
-                            .weight(1f)
-                            .height(56.dp),
-                    shape = RoundedCornerShape(18.dp),
-                    border = BorderStroke(1.dp, ReferenceDesignTokens.Border),
-                    colors =
-                        ButtonDefaults.outlinedButtonColors(
-                            contentColor = ReferenceDesignTokens.TextPrimary,
-                        ),
-                ) {
-                    Text("다시 측정", fontWeight = FontWeight.Bold)
-                }
-                Button(
-                    onClick = onContinue,
-                    modifier =
-                        Modifier
-                            .weight(1f)
-                            .height(56.dp),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = ReferenceDesignTokens.Dark),
-                ) {
-                    Icon(Icons.Filled.PlayArrow, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text("집중 시작", fontWeight = FontWeight.ExtraBold)
-                }
-            }
-
             !isRunning && !isPaused -> {
                 Button(
                     onClick = onStart,
@@ -691,6 +759,23 @@ private fun environmentStatusLabel(
         isRunning -> "측정 중"
         isPaused -> "일시정지"
         else -> "대기 중"
+    }
+
+private fun sensorGraphStatusLabel(uiState: EnvironmentSessionUiState): String =
+    when {
+        uiState.isCompleted -> "측정이 완료되어 마지막 값으로 고정됐어요"
+        uiState.isRunning -> "측정 중 실시간으로 업데이트돼요"
+        uiState.isPaused -> "일시정지 중에는 그래프가 멈춰요"
+        else -> "측정을 시작하면 그래프가 표시돼요"
+    }
+
+private fun environmentScoreLabel(score: Int?): String =
+    when {
+        score == null -> "예측 점수 대기 중"
+        score >= 80 -> "집중하기 좋은 환경이에요"
+        score >= 60 -> "무난한 집중 환경이에요"
+        score > 0 -> "집중 전 조정이 필요해요"
+        else -> "유효한 측정값이 부족해요"
     }
 
 private fun formatRemainingTime(seconds: Int): String {

@@ -39,13 +39,18 @@ class NoiseSensorManager {
             }
 
             val audioRecord =
-                AudioRecord(
-                    MediaRecorder.AudioSource.MIC,
-                    sampleRate,
-                    channelConfig,
-                    audioFormat,
-                    bufferSize,
-                )
+                runCatching {
+                    AudioRecord(
+                        MediaRecorder.AudioSource.MIC,
+                        sampleRate,
+                        channelConfig,
+                        audioFormat,
+                        bufferSize,
+                    )
+                }.getOrElse {
+                    close(it)
+                    return@callbackFlow
+                }
 
             if (audioRecord.state != AudioRecord.STATE_INITIALIZED) {
                 audioRecord.release()
@@ -55,7 +60,12 @@ class NoiseSensorManager {
 
             val shortBufferSize = bufferSize / 2
             val buffer = ShortArray(shortBufferSize)
-            audioRecord.startRecording()
+            runCatching { audioRecord.startRecording() }
+                .onFailure {
+                    audioRecord.release()
+                    close(it)
+                    return@callbackFlow
+                }
 
             val job =
                 launch(Dispatchers.IO) {
@@ -76,7 +86,11 @@ class NoiseSensorManager {
 
             awaitClose {
                 job.cancel()
-                audioRecord.stop()
+                runCatching {
+                    if (audioRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+                        audioRecord.stop()
+                    }
+                }
                 audioRecord.release()
             }
         }

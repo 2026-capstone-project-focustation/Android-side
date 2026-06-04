@@ -17,11 +17,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Sensors
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -29,11 +31,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,6 +49,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import net.focustation.myapplication.data.model.SensorTimelinePoint
 import net.focustation.myapplication.data.model.SensorTimelines
 import net.focustation.myapplication.data.repository.FirestoreStudyRepository
@@ -65,11 +70,16 @@ import java.util.Locale
 fun SessionReportDetailScreen(
     sessionId: String,
     onBack: () -> Unit,
+    onDeleted: () -> Unit,
     repository: FirestoreStudyRepository = remember { FirestoreStudyRepository() },
 ) {
     var isLoading by remember(sessionId) { mutableStateOf(true) }
     var record by remember(sessionId) { mutableStateOf<StudySessionRecord?>(null) }
     var errorMessage by remember(sessionId) { mutableStateOf<String?>(null) }
+    var showDeleteDialog by remember(sessionId) { mutableStateOf(false) }
+    var isDeleting by remember(sessionId) { mutableStateOf(false) }
+    var deleteErrorMessage by remember(sessionId) { mutableStateOf<String?>(null) }
+    val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(sessionId) {
         DebugLog.d("[리포트상세][조회] 시작 sessionId=$sessionId")
@@ -95,8 +105,54 @@ fun SessionReportDetailScreen(
         isLoading = isLoading,
         record = record,
         errorMessage = errorMessage,
+        deleteErrorMessage = deleteErrorMessage,
+        isDeleting = isDeleting,
         onBack = onBack,
+        onDeleteClick = {
+            if (record != null) showDeleteDialog = true
+        },
     )
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { if (!isDeleting) showDeleteDialog = false },
+            title = { Text("리포트 삭제") },
+            text = { Text("이 세션 리포트를 삭제할까요? 삭제한 기록은 영구 삭제됩니다.") },
+            confirmButton = {
+                TextButton(
+                    enabled = !isDeleting,
+                    onClick = {
+                        coroutineScope.launch {
+                            isDeleting = true
+                            deleteErrorMessage = null
+                            repository.deleteStudySession(sessionId).fold(
+                                onSuccess = {
+                                    isDeleting = false
+                                    showDeleteDialog = false
+                                    onDeleted()
+                                },
+                                onFailure = { error ->
+                                    isDeleting = false
+                                    showDeleteDialog = false
+                                    deleteErrorMessage = error.message ?: "리포트 삭제에 실패했어요."
+                                },
+                            )
+                        }
+                    },
+                ) {
+                    Text(if (isDeleting) "삭제 중..." else "삭제")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !isDeleting,
+                    onClick = { showDeleteDialog = false },
+                ) {
+                    Text("취소")
+                }
+            },
+        )
+    }
 }
 
 @Composable
@@ -104,7 +160,10 @@ private fun SessionReportDetailContent(
     isLoading: Boolean,
     record: StudySessionRecord?,
     errorMessage: String?,
+    deleteErrorMessage: String?,
+    isDeleting: Boolean,
     onBack: () -> Unit,
+    onDeleteClick: () -> Unit,
 ) {
     Scaffold(
         containerColor = ReferenceDesignTokens.Screen,
@@ -120,7 +179,19 @@ private fun SessionReportDetailContent(
                     .padding(top = 12.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            DetailHeader(onBack = onBack)
+            DetailHeader(
+                isDeleteEnabled = record != null && !isDeleting,
+                onBack = onBack,
+                onDeleteClick = onDeleteClick,
+            )
+
+            deleteErrorMessage?.let {
+                Text(
+                    text = it,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
 
             when {
                 isLoading -> {
@@ -152,7 +223,11 @@ private fun SessionReportDetailContent(
 }
 
 @Composable
-private fun DetailHeader(onBack: () -> Unit) {
+private fun DetailHeader(
+    isDeleteEnabled: Boolean,
+    onBack: () -> Unit,
+    onDeleteClick: () -> Unit,
+) {
     Box(
         modifier =
             Modifier
@@ -181,6 +256,23 @@ private fun DetailHeader(onBack: () -> Unit) {
             textAlign = TextAlign.Center,
             modifier = Modifier.align(Alignment.Center),
         )
+        IconButton(
+            onClick = onDeleteClick,
+            enabled = isDeleteEnabled,
+            modifier =
+                Modifier
+                    .align(Alignment.CenterEnd)
+                    .size(42.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFFFECEC)),
+        ) {
+            Icon(
+                Icons.Outlined.Delete,
+                contentDescription = "리포트 삭제",
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(18.dp),
+            )
+        }
     }
 }
 
@@ -559,7 +651,10 @@ private fun SessionReportDetailPreview() {
             isLoading = false,
             record = sampleStudySessionRecord(),
             errorMessage = null,
+            deleteErrorMessage = null,
+            isDeleting = false,
             onBack = {},
+            onDeleteClick = {},
         )
     }
 }

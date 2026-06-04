@@ -44,8 +44,15 @@ fun AppNavGraph(navController: NavHostController) {
         composable(NavRoute.Login.route) {
             LoginScreen(
                 onLoginSuccess = {
-                    navController.navigate(NavRoute.OnboardingSetup.route) {
+                    val nextRoute =
+                        if (onboardingStore.isCompleted()) {
+                            NavRoute.Dashboard.route
+                        } else {
+                            NavRoute.OnboardingSetup.route
+                        }
+                    navController.navigate(nextRoute) {
                         popUpTo(NavRoute.Login.route) { inclusive = true }
+                        launchSingleTop = true
                     }
                 },
             )
@@ -149,8 +156,12 @@ fun AppNavGraph(navController: NavHostController) {
 
         composable(NavRoute.FeedbackSession.route) {
             FeedbackSessionScreen(
-                onSubmit = {
-                    navController.navigateHomeAfterSession()
+                onSubmit = { sessionId ->
+                    if (sessionId.isBlank()) {
+                        navController.navigateHomeAfterSession()
+                    } else {
+                        navController.navigateToCreatedReport(sessionId)
+                    }
                 },
             )
         }
@@ -186,6 +197,7 @@ fun AppNavGraph(navController: NavHostController) {
             SessionReportDetailScreen(
                 sessionId = sessionId,
                 onBack = { navController.popBackStack() },
+                onDeleted = { navController.popBackStack() },
             )
         }
 
@@ -216,6 +228,9 @@ fun AppNavGraph(navController: NavHostController) {
                 onNavigateToSpaceHistory = {
                     navController.navigateToMainTab(NavRoute.SpaceHistory.route)
                 },
+                onSignedOut = {
+                    navController.navigateToLoginAfterSignOut()
+                },
             )
         }
     }
@@ -235,6 +250,20 @@ private fun NavHostController.navigateToMainTab(route: String) {
 private fun NavHostController.navigateHomeAfterSession() {
     navigate(NavRoute.Dashboard.route) {
         popUpTo(NavRoute.Dashboard.route)
+        launchSingleTop = true
+    }
+}
+
+private fun NavHostController.navigateToCreatedReport(sessionId: String) {
+    navigate(NavRoute.SessionReportDetail.createRoute(sessionId)) {
+        popUpTo(NavRoute.Dashboard.route)
+        launchSingleTop = true
+    }
+}
+
+private fun NavHostController.navigateToLoginAfterSignOut() {
+    navigate(NavRoute.Login.route) {
+        popUpTo(0) { inclusive = true }
         launchSingleTop = true
     }
 }
