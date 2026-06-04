@@ -501,6 +501,19 @@ class FocusSessionViewModel(
         val avgNoise = if (noiseCount > 0) (noiseSum / noiseCount).toFloat() else 0f
         val avgIlluminance = if (lightCount > 0) (lightSum / lightCount).toFloat() else 0f
         val avgVibration = if (vibrationCount > 0) vibrationSum / vibrationCount else 0.0
+        val avgEnvironmentScore =
+            calculateOnDeviceEnvironmentScore(
+                noiseSamples = noiseSamples.toList(),
+                lightSamples = lightSamples.toList(),
+                vibrationSamples = vibrationSamples.toList(),
+            ).toFloat()
+        val focusTimeline =
+            buildFocusScoreTimeline(
+                noiseSamples = noiseSamples.toList(),
+                lightSamples = lightSamples.toList(),
+                vibrationSamples = vibrationSamples.toList(),
+                elapsedSeconds = state.elapsedSeconds,
+            )
         val sensorSummary =
             buildSensorSummaryPayload(
                 noiseSamples = noiseSamples.toList(),
@@ -526,11 +539,11 @@ class FocusSessionViewModel(
                     } else {
                         0
                     },
-                avgEnvironmentScore = 0f,
+                avgEnvironmentScore = avgEnvironmentScore,
                 avgNoise = avgNoise,
                 avgIlluminance = avgIlluminance,
                 avgVibration = avgVibration,
-                focusTimeline = emptyList(),
+                focusTimeline = focusTimeline,
                 sensorTimelines = sensorTimelines,
                 placeName = selectedPlace?.name.orEmpty(),
                 placeLatitude = selectedPlace?.latitude,
@@ -690,6 +703,64 @@ private fun buildSensorTimelinePoints(
             value = samples[sampleIndex].coerceAtLeast(0f),
         )
     }
+}
+
+private fun buildFocusScoreTimeline(
+    noiseSamples: List<Double>,
+    lightSamples: List<Float>,
+    vibrationSamples: List<Double>,
+    elapsedSeconds: Int,
+    maxPoints: Int = 24,
+): List<FocusDataPoint> {
+    val sourceCount = maxOf(noiseSamples.size, lightSamples.size, vibrationSamples.size)
+    if (sourceCount <= 0) return emptyList()
+
+    val pointCount = sourceCount.coerceAtMost(maxPoints)
+    val safeElapsedSeconds = elapsedSeconds.coerceAtLeast(0)
+    return List(pointCount) { index ->
+        val sourceIndex =
+            if (pointCount == 1) {
+                0
+            } else {
+                index * (sourceCount - 1) / (pointCount - 1)
+            }
+        val seconds =
+            if (pointCount == 1) {
+                safeElapsedSeconds
+            } else {
+                index * safeElapsedSeconds / (pointCount - 1)
+            }
+        val score =
+            calculateOnDeviceEnvironmentScore(
+                noiseSamples =
+                    noiseSamples
+                        .valueAtRelativeIndex(sourceIndex, sourceCount)
+                        .singleItemListOrEmpty(),
+                lightSamples =
+                    lightSamples
+                        .valueAtRelativeIndex(sourceIndex, sourceCount)
+                        .singleItemListOrEmpty(),
+                vibrationSamples =
+                    vibrationSamples
+                        .valueAtRelativeIndex(sourceIndex, sourceCount)
+                        .singleItemListOrEmpty(),
+            )
+        FocusDataPoint(
+            timeLabel = formatSensorTimelineLabel(seconds),
+            focusScore = score.toFloat().coerceIn(0f, 100f),
+        )
+    }
+}
+
+private fun <T> T?.singleItemListOrEmpty(): List<T> = this?.let { listOf(it) } ?: emptyList()
+
+private fun <T> List<T>.valueAtRelativeIndex(
+    sourceIndex: Int,
+    sourceCount: Int,
+): T? {
+    if (isEmpty() || sourceCount <= 1) return firstOrNull()
+    val index = sourceIndex * (size - 1) / (sourceCount - 1)
+    return getOrNull(index)
 }
 
 private fun formatSensorTimelineLabel(seconds: Int): String =
