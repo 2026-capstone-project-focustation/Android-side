@@ -67,8 +67,12 @@ class DashboardViewModel(
         if (lightJob == null) {
             lightJob =
                 viewModelScope.launch {
-                    lightManager.getLightFlow().collect { lux ->
-                        updateEnvironmentSnapshot(illuminance = lux)
+                    runCatching {
+                        lightManager.getLightFlow().collect { lux ->
+                            updateEnvironmentSnapshot(illuminance = lux)
+                        }
+                    }.onFailure { error ->
+                        DebugLog.e("[대시보드][실시간조도] 실패: ${error.message}", error)
                     }
                 }
         }
@@ -76,8 +80,12 @@ class DashboardViewModel(
         if (vibrationJob == null) {
             vibrationJob =
                 viewModelScope.launch {
-                    vibrationManager.getVibrationFlow().collect { vibration ->
-                        updateEnvironmentSnapshot(vibration = vibration)
+                    runCatching {
+                        vibrationManager.getVibrationFlow().collect { vibration ->
+                            updateEnvironmentSnapshot(vibration = vibration)
+                        }
+                    }.onFailure { error ->
+                        DebugLog.e("[대시보드][실시간진동] 실패: ${error.message}", error)
                     }
                 }
         }
@@ -85,8 +93,12 @@ class DashboardViewModel(
         if (hasNoisePermission && noiseJob == null) {
             noiseJob =
                 viewModelScope.launch {
-                    noiseManager.getNoiseFlow().collect { db ->
-                        updateEnvironmentSnapshot(noise = db.toFloat())
+                    runCatching {
+                        noiseManager.getNoiseFlow().collect { db ->
+                            updateEnvironmentSnapshot(noise = db.toFloat())
+                        }
+                    }.onFailure { error ->
+                        DebugLog.e("[대시보드][실시간소음] 실패: ${error.message}", error)
                     }
                 }
         }
