@@ -1,5 +1,6 @@
 package net.focustation.myapplication.ui.screen.session
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,10 +12,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -29,9 +33,13 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -52,8 +60,12 @@ import kotlinx.coroutines.launch
 import net.focustation.myapplication.R
 import net.focustation.myapplication.data.repository.FirestoreStudyRepository
 import net.focustation.myapplication.data.repository.SavedPlaceRecord
+import net.focustation.myapplication.data.repository.StudySessionRecord
 import net.focustation.myapplication.ui.components.ReferenceDesignTokens
 import net.focustation.myapplication.ui.theme.FocustationTheme
+import net.focustation.myapplication.util.isPlausibleKoreanCoordinate
+import java.time.Instant
+import java.time.ZoneId
 
 data class StartSessionPlaceUiState(
     val isLoading: Boolean = true,
@@ -73,19 +85,37 @@ class StartSessionPlaceViewModel(
 
     private fun loadRecentPlaces() {
         viewModelScope.launch {
-            val result = repository.getSavedPlaces(RECENT_LIMIT)
+            val result = repository.getStudySessions()
             _uiState.value =
                 StartSessionPlaceUiState(
                     isLoading = false,
-                    recentPlaces = result.getOrNull().orEmpty(),
+                    recentPlaces = result.getOrNull()?.toRecentPlaces().orEmpty(),
                     loadFailed = result.isFailure,
                 )
         }
     }
+}
 
-    private companion object {
-        private const val RECENT_LIMIT = 3L
-    }
+// 리포트 보관함(세션 기록)에서 최근 방문 공간을 중복 없이 추려 카드용으로 만든다.
+// 별도 savedPlaces 컬렉션 대신 세션의 placeSnapshot을 재활용한다(읽기 권한도 세션과 동일).
+private fun List<StudySessionRecord>.toRecentPlaces(): List<SavedPlaceRecord> {
+    val latestPerPlace =
+        filter { isPlausibleKoreanCoordinate(it.latitude, it.longitude) }
+            .filter { it.placeName.isNotBlank() && it.placeName != "장소 미지정" }
+            .groupBy { it.placeName }
+            .map { (_, group) -> group.maxByOrNull { it.endedAtEpochMillis } ?: group.first() }
+    return latestPerPlace
+        .sortedByDescending { it.endedAtEpochMillis }
+        .take(3)
+        .map { session ->
+            SavedPlaceRecord(
+                id = session.placeName,
+                name = session.placeName,
+                latitude = session.latitude,
+                longitude = session.longitude,
+                lastUsedMillis = session.endedAtEpochMillis.takeIf { it > 0L },
+            )
+        }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -131,6 +161,8 @@ private fun StartSessionPlaceSheetContent(
                 .padding(top = 4.dp, bottom = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        var selectedId by remember { mutableStateOf<String?>(null) }
+
         PokeyPlaceHero()
 
         Text(
@@ -169,15 +201,45 @@ private fun StartSessionPlaceSheetContent(
                     EmptyRecentHint()
 
                 else ->
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
                         uiState.recentPlaces.forEach { place ->
-                            RecentPlaceCard(place = place, onClick = { onSelectRecent(place) })
+                            RecentPlaceCard(
+                                place = place,
+                                selected = place.id == selectedId,
+                                onClick = { selectedId = place.id },
+                            )
                         }
                     }
             }
         }
 
         Spacer(Modifier.height(12.dp))
+
+        val selectedPlace = uiState.recentPlaces.firstOrNull { it.id == selectedId }
+        if (selectedPlace != null) {
+            Button(
+                onClick = { onSelectRecent(selectedPlace) },
+                modifier = Modifier.fillMaxWidth().height(54.dp),
+                shape = CircleShape,
+                colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor = ReferenceDesignTokens.Yellow,
+                        contentColor = ReferenceDesignTokens.TextPrimary,
+                    ),
+            ) {
+                Text(
+                    text = "이 공간에서 시작",
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+        }
 
         OutlinedButton(
             onClick = onPickManually,
@@ -225,16 +287,26 @@ private fun PokeyPlaceHero() {
 @Composable
 private fun RecentPlaceCard(
     place: SavedPlaceRecord,
+    selected: Boolean,
     onClick: () -> Unit,
 ) {
     Surface(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(68.dp)
+                .clip(RoundedCornerShape(18.dp)),
         shape = RoundedCornerShape(18.dp),
-        color = ReferenceDesignTokens.PaleBlueTrack,
+        color = if (selected) ReferenceDesignTokens.Yellow.copy(alpha = 0.12f) else Color(0xFFF7F8FA),
+        border =
+            BorderStroke(
+                width = if (selected) 1.5.dp else 1.dp,
+                color = if (selected) ReferenceDesignTokens.Yellow else Color(0xFFE9EBEF),
+            ),
         onClick = onClick,
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -253,15 +325,38 @@ private fun RecentPlaceCard(
                     modifier = Modifier.size(20.dp),
                 )
             }
-            Text(
-                text = place.name,
-                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-                color = ReferenceDesignTokens.TextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = place.name,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                    color = ReferenceDesignTokens.TextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                place.lastStudiedLabel()?.let { label ->
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = ReferenceDesignTokens.TextSecondary.copy(alpha = 0.7f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
         }
     }
+}
+
+// 최근 공간 카드의 보조 문구: "(N월 N일)에 공부했어요". 날짜가 없으면 표시하지 않는다.
+private fun SavedPlaceRecord.lastStudiedLabel(): String? {
+    val millis = lastUsedMillis ?: return null
+    val date =
+        Instant
+            .ofEpochMilli(millis)
+            .atZone(ZoneId.systemDefault())
+            .toLocalDate()
+    return "${date.monthValue}월 ${date.dayOfMonth}일에 공부했어요"
 }
 
 @Composable
