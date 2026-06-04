@@ -47,6 +47,12 @@ class DashboardViewModel(
     private val repository: FirestoreStudyRepository = FirestoreStudyRepository(),
     private val authProvider: () -> FirebaseAuth = { FirebaseAuth.getInstance() },
 ) : AndroidViewModel(app) {
+    constructor(app: Application) : this(
+        app = app,
+        repository = FirestoreStudyRepository(),
+        authProvider = { FirebaseAuth.getInstance() },
+    )
+
     private val auth by lazy { authProvider() }
     private val lightManager = LightSensorManager(app)
     private val noiseManager = NoiseSensorManager()
