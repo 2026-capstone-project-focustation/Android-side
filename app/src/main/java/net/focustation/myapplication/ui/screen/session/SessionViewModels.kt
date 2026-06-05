@@ -63,6 +63,7 @@ class EnvironmentSessionViewModel(
 
     private var timerJob: Job? = null
     private var noiseJob: Job? = null
+    private var predictionJob: Job? = null
     private var hasNoisePerm = false
 
     // 슬라이딩 윈도우 버퍼 (30샘플 ≈ 30초)
@@ -221,6 +222,8 @@ class EnvironmentSessionViewModel(
      */
     fun stopSession() {
         timerJob?.cancel()
+        predictionJob?.cancel()
+        predictionJob = null
         lightBuf.clear()
         noiseBuf.clear()
         vibBuf.clear()
@@ -231,36 +234,52 @@ class EnvironmentSessionViewModel(
     }
 
     private fun requestSessionPrediction() {
-        viewModelScope.launch {
-            val state = _uiState.value
-            val request = buildPredictionRequest(state)
-            sessionApi.predictSession(request).fold(
-                onSuccess = { prediction ->
-                    _uiState.update {
-                        it.copy(
-                            isPredicting = false,
-                            predictionScore = prediction.mlScore.toInt().coerceIn(0, 100),
-                            predictionErrorMessage = null,
-                        )
-                    }
-                },
-                onFailure = { error ->
-                    _uiState.update {
-                        it.copy(
-                            isPredicting = false,
-                            predictionScore = null,
-                            predictionErrorMessage = error.message ?: "환경 예측 점수를 만들지 못했어요.",
-                        )
-                    }
-                },
-            )
-        }
+        predictionJob?.cancel()
+        predictionJob =
+            viewModelScope.launch {
+                val state = _uiState.value
+                val request = buildPredictionRequest(state)
+                sessionApi.predictSession(request).fold(
+                    onSuccess = { prediction ->
+                        val score = prediction.mlScore
+                        val valid = score.isFinite() && score >= 0.0 && score <= 100.0
+                        _uiState.update {
+                            if (valid) {
+                                it.copy(
+                                    isPredicting = false,
+                                    predictionScore = score.toInt(),
+                                    predictionErrorMessage = null,
+                                )
+                            } else {
+                                it.copy(
+                                    isPredicting = false,
+                                    predictionScore = null,
+                                    predictionErrorMessage = "환경 예측 점수가 올바르지 않아요.",
+                                )
+                            }
+                        }
+                    },
+                    onFailure = { error ->
+                        _uiState.update {
+                            it.copy(
+                                isPredicting = false,
+                                predictionScore = null,
+                                predictionErrorMessage = error.message ?: "환경 예측 점수를 만들지 못했어요.",
+                            )
+                        }
+                    },
+                )
+            }
     }
 
     private suspend fun buildPredictionRequest(state: EnvironmentSessionUiState): CreateSessionRequest {
+        val cachedModelInput = SurveyResponseStore.latest()?.modelInput
         val surveyModelInput =
-            SurveyResponseStore.latest()?.modelInput
-                ?: surveyRepository.loadLatestModelInput().getOrElse { emptyMap() }
+            if (!cachedModelInput.isNullOrEmpty()) {
+                cachedModelInput
+            } else {
+                surveyRepository.loadLatestModelInput().getOrElse { emptyMap() }
+            }
         val sensorSummary =
             buildSensorSummaryPayload(
                 noiseSamples = noiseSamples.toList(),
