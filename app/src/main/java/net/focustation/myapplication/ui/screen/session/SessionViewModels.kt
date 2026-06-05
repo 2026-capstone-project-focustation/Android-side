@@ -108,19 +108,24 @@ class EnvironmentSessionViewModel(
      * and refreshes the raw sensor snapshot after each sample.
      */
     fun startNoiseCollection() {
-        if (noiseJob != null) return
+        if (noiseJob?.isActive == true) return
         hasNoisePerm = true
         DebugLog.d("[집중세션][소음측정] 마이크 소음 측정을 시작합니다.")
         noiseJob =
             viewModelScope.launch {
-                noiseManager.getNoiseFlow().collect { db ->
-                    if (!_uiState.value.isRunning) return@collect
-                    noiseBuf.addLast(db)
-                    if (noiseBuf.size > WINDOW) noiseBuf.removeFirst()
-                    noiseSamples += db
-                    recalculate()
+                runCatching {
+                    noiseManager.getNoiseFlow().collect { db ->
+                        if (!_uiState.value.isRunning) return@collect
+                        noiseBuf.addLast(db)
+                        if (noiseBuf.size > WINDOW) noiseBuf.removeFirst()
+                        noiseSamples += db
+                        recalculate()
+                    }
+                }.onFailure { error ->
+                    DebugLog.e("[집중세션][소음측정] 실패: ${error.message}", error)
                 }
             }
+        noiseJob?.invokeOnCompletion { noiseJob = null }
     }
 
     private fun recalculate() {
@@ -421,20 +426,25 @@ class FocusSessionViewModel(
      * `WINDOW` most recent samples), and invokes `recalculate()` after each sample.
      */
     fun startNoiseCollection() {
-        if (noiseJob != null) return
+        if (noiseJob?.isActive == true) return
         hasNoisePerm = true
         noiseJob =
             viewModelScope.launch {
-                noiseManager.getNoiseFlow().collect { db ->
-                    if (!_uiState.value.isRunning) return@collect
-                    noiseBuf.addLast(db)
-                    if (noiseBuf.size > WINDOW) noiseBuf.removeFirst()
-                    noiseSum += db
-                    noiseCount += 1
-                    noiseSamples += db
-                    updateSensorSnapshot()
+                runCatching {
+                    noiseManager.getNoiseFlow().collect { db ->
+                        if (!_uiState.value.isRunning) return@collect
+                        noiseBuf.addLast(db)
+                        if (noiseBuf.size > WINDOW) noiseBuf.removeFirst()
+                        noiseSum += db
+                        noiseCount += 1
+                        noiseSamples += db
+                        updateSensorSnapshot()
+                    }
+                }.onFailure { error ->
+                    DebugLog.e("[집중세션][소음측정] 실패: ${error.message}", error)
                 }
             }
+        noiseJob?.invokeOnCompletion { noiseJob = null }
     }
 
     private fun updateSensorSnapshot() {
