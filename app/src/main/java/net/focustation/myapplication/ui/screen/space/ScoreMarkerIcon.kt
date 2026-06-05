@@ -10,7 +10,9 @@ import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
+import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.ColorUtils
+import net.focustation.myapplication.R
 
 /**
  * 공간기록 지도 마커: 통통한 풍선 핀을 점수색으로 채우되 반투명·그라데이션으로 유리(glassy) 느낌을 준다.
@@ -100,7 +102,11 @@ fun buildScoreMarkerBitmap(
         Paint(Paint.ANTI_ALIAS_FLAG).apply {
             this.color = Color.parseColor("#1A1A1A")
             textAlign = Paint.Align.CENTER
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            typeface =
+                Typeface.create(
+                    ResourcesCompat.getFont(context, R.font.chosun_gu) ?: Typeface.DEFAULT,
+                    Typeface.BOLD,
+                )
             textSize = innerRadius * if (label.length >= 3) 0.74f else 1.04f
         }
     val baseline = headCenterY - (textPaint.descent() + textPaint.ascent()) / 2f

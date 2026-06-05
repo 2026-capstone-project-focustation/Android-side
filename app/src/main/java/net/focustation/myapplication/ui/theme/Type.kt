@@ -8,7 +8,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import net.focustation.myapplication.R
 
-// 조선굴림(ChosunGu) — 단일 weight. 볼드 미사용.
+// 조선굴림(ChosunGu) — 단일 weight 폰트. 강조용 FontWeight.Bold는 synthetic(faux) bold로 처리된다.
 val ChosunGu = FontFamily(Font(R.font.chosun_gu))
 
 val Typography =

@@ -5,6 +5,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.PackageManager
+import android.content.res.Resources
 import android.graphics.PointF
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -459,9 +460,10 @@ private fun frameCameraToRecords(
     } else {
         val builder = LatLngBounds.Builder()
         records.forEach { builder.include(LatLng(it.latitude, it.longitude)) }
+        val padding = (48 * Resources.getSystem().displayMetrics.density).toInt()
         map.moveCamera(
             CameraUpdate
-                .fitBounds(builder.build(), 120)
+                .fitBounds(builder.build(), padding)
                 .animate(CameraAnimation.Easing),
         )
     }
