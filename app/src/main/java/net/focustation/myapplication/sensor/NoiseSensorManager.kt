@@ -67,11 +67,20 @@ class NoiseSensorManager {
                     return@callbackFlow
                 }
 
+            if (audioRecord.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
+                audioRecord.release()
+                close(IllegalStateException("AudioRecord가 RECORDING 상태로 진입하지 못했어요."))
+                return@callbackFlow
+            }
+
             val job =
                 launch(Dispatchers.IO) {
                     while (isActive && audioRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
                         val readSize = audioRecord.read(buffer, 0, buffer.size)
-                        if (readSize < 0) break
+                        if (readSize < 0) {
+                            close(IllegalStateException("AudioRecord.read 실패: $readSize"))
+                            break
+                        }
                         if (readSize > 0) {
                             var sum = 0.0
                             for (i in 0 until readSize) {
