@@ -24,6 +24,7 @@ class LoginViewModel(
     private val authStateListener =
         FirebaseAuth.AuthStateListener { auth ->
             if (auth.currentUser != null) {
+                clearPreviousUserCache()
                 _uiState.value =
                     _uiState.value.copy(
                         isLoading = false,
