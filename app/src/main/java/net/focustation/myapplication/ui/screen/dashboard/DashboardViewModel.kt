@@ -65,12 +65,16 @@ class DashboardViewModel(
     private var noiseJob: Job? = null
     private var vibrationJob: Job? = null
 
+    private var hasNoiseSample = false
+    private var hasLightSample = false
+    private var hasVibrationSample = false
+
     init {
         refresh()
     }
 
     fun startRealtimeEnvironmentMonitoring(hasNoisePermission: Boolean) {
-        if (lightJob == null) {
+        if (lightJob?.isActive != true) {
             lightJob =
                 viewModelScope.launch {
                     runCatching {
@@ -81,9 +85,10 @@ class DashboardViewModel(
                         DebugLog.e("[대시보드][실시간조도] 실패: ${error.message}", error)
                     }
                 }
+            lightJob?.invokeOnCompletion { lightJob = null }
         }
 
-        if (vibrationJob == null) {
+        if (vibrationJob?.isActive != true) {
             vibrationJob =
                 viewModelScope.launch {
                     runCatching {
@@ -94,9 +99,10 @@ class DashboardViewModel(
                         DebugLog.e("[대시보드][실시간진동] 실패: ${error.message}", error)
                     }
                 }
+            vibrationJob?.invokeOnCompletion { vibrationJob = null }
         }
 
-        if (hasNoisePermission && noiseJob == null) {
+        if (hasNoisePermission && noiseJob?.isActive != true) {
             noiseJob =
                 viewModelScope.launch {
                     runCatching {
@@ -107,6 +113,7 @@ class DashboardViewModel(
                         DebugLog.e("[대시보드][실시간소음] 실패: ${error.message}", error)
                     }
                 }
+            noiseJob?.invokeOnCompletion { noiseJob = null }
         }
     }
 
@@ -169,7 +176,7 @@ class DashboardViewModel(
                             todayAvgFocus = todayAvgFocus,
                             todayWorkMinutes = todayWorkMinutes,
                             hasTodaySessions = todayRecords.isNotEmpty(),
-                            hasEnvironmentSnapshot = snapshot.hasAnyReading(),
+                            hasEnvironmentSnapshot = hasAnyEnvironmentSample(),
                             environmentSnapshot = snapshot,
                             recentSessions = recentTop3,
                             isLoading = false,
@@ -199,6 +206,10 @@ class DashboardViewModel(
         illuminance: Float? = null,
         vibration: Double? = null,
     ) {
+        if (noise != null) hasNoiseSample = true
+        if (illuminance != null) hasLightSample = true
+        if (vibration != null) hasVibrationSample = true
+
         _uiState.update { state ->
             val nextSnapshot =
                 state.environmentSnapshot.copy(
@@ -207,11 +218,14 @@ class DashboardViewModel(
                     vibration = vibration ?: state.environmentSnapshot.vibration,
                 )
             state.copy(
-                hasEnvironmentSnapshot = nextSnapshot.hasAnyReading(),
+                hasEnvironmentSnapshot = hasAnyEnvironmentSample(),
                 environmentSnapshot = nextSnapshot,
             )
         }
     }
+
+    // 값의 크기(>0)가 아니라 실제 샘플 수신 여부로 판정한다. 실측 0값(0 lux/0 진동)을 데이터 없음으로 오판하지 않기 위함.
+    private fun hasAnyEnvironmentSample(): Boolean = hasNoiseSample || hasLightSample || hasVibrationSample
 
     private fun toSessionSummary(record: StudySessionRecord): SessionSummary =
         SessionSummary(
@@ -247,5 +261,3 @@ class DashboardViewModel(
         }
     }
 }
-
-private fun EnvironmentSnapshot.hasAnyReading(): Boolean = noiseLevel > 0f || illuminance > 0f || vibration > 0.0
