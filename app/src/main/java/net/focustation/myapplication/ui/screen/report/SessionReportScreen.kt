@@ -318,6 +318,7 @@ private fun ArchiveSectionHeader(
             text = title,
             style = MaterialTheme.typography.titleMedium,
             color = FocusInk,
+            fontWeight = FontWeight.Bold,
         )
         IconButton(
             onClick = onRefresh,
