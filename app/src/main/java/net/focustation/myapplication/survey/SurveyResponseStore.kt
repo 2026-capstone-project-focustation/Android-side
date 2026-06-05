@@ -20,4 +20,10 @@ object SurveyResponseStore {
 
     @Synchronized
     fun latest(): SurveyResponse? = latestResponse
+
+    @Synchronized
+    fun clear() {
+        latestResponse = null
+        DebugLog.d("[Survey][초기화] 저장된 설문 응답 제거")
+    }
 }

@@ -5,6 +5,9 @@ import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import net.focustation.myapplication.session.SessionPlaceSelectionStore
+import net.focustation.myapplication.session.SessionReportDraftStore
+import net.focustation.myapplication.survey.SurveyResponseStore
 
 data class SettingsUiState(
     val userName: String = "",
@@ -28,6 +31,9 @@ class SettingsViewModel(
 
     fun signOut() {
         auth.signOut()
+        SurveyResponseStore.clear()
+        SessionReportDraftStore.clear()
+        SessionPlaceSelectionStore.clear()
         _uiState.value = _uiState.value.copy(userName = "로그아웃됨", userEmail = "")
     }
 }
