@@ -5,6 +5,8 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.PackageManager
+import android.content.res.Resources
+import android.graphics.PointF
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -59,11 +61,14 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.naver.maps.geometry.LatLng
+import com.naver.maps.geometry.LatLngBounds
+import com.naver.maps.map.CameraAnimation
 import com.naver.maps.map.CameraUpdate
 import com.naver.maps.map.LocationTrackingMode
 import com.naver.maps.map.MapView
 import com.naver.maps.map.NaverMap
 import com.naver.maps.map.overlay.Marker
+import com.naver.maps.map.overlay.OverlayImage
 import com.naver.maps.map.util.FusedLocationSource
 import net.focustation.myapplication.data.model.SpaceRecord
 import net.focustation.myapplication.ui.components.MainBottomDestination
@@ -267,7 +272,6 @@ private fun NaverMapSection(
     val lifecycleOwner = LocalLifecycleOwner.current
     val activity = remember(context) { context.findActivity() }
     val onPinClickState by rememberUpdatedState(onPinClick)
-    val latestRecords by rememberUpdatedState(records)
 
     val mapView =
         remember {
@@ -344,10 +348,6 @@ private fun NaverMapSection(
                 movedToInitialCamera = false
                 map.uiSettings.isLocationButtonEnabled = true
                 map.setOnMapClickListener { _, _ -> onPinClickState(null) }
-                latestRecords.firstOrNull()?.let { first ->
-                    map.moveCamera(CameraUpdate.scrollTo(LatLng(first.latitude, first.longitude)))
-                    movedToInitialCamera = true
-                }
                 DebugLog.d("Map initialized successfully")
                 mapInitErrorMessage = null
             } catch (e: Exception) {
@@ -357,26 +357,33 @@ private fun NaverMapSection(
         }
     }
 
-    LaunchedEffect(naverMap, records, selectedId) {
+    // 핀들이 한 화면에 들어오도록 최초 1회 카메라 프레이밍 (1개=확대, 여러 개=fitBounds)
+    LaunchedEffect(naverMap, records) {
         val map = naverMap ?: return@LaunchedEffect
-        if (!movedToInitialCamera && selectedId == null) {
-            records.firstOrNull()?.let { first ->
-                map.moveCamera(CameraUpdate.scrollTo(LatLng(first.latitude, first.longitude)))
-                movedToInitialCamera = true
-            }
-        }
+        if (movedToInitialCamera || records.isEmpty() || selectedId != null) return@LaunchedEffect
+        frameCameraToRecords(map, records)
+        movedToInitialCamera = true
     }
 
-    LaunchedEffect(naverMap, records) {
+    // 점수 배지 마커 렌더링 (선택 시 확대 + 장소명 캡션)
+    LaunchedEffect(naverMap, records, selectedId) {
         val naverMapInstance = naverMap ?: return@LaunchedEffect
         renderedMarkers.forEach { it.map = null }
         renderedMarkers.clear()
 
         records.forEach { record ->
+            val isSelected = record.id == selectedId
             val marker =
                 Marker().apply {
                     position = LatLng(record.latitude, record.longitude)
+                    icon =
+                        OverlayImage.fromBitmap(
+                            buildScoreMarkerBitmap(context, record.avgFocusScore, isSelected),
+                        )
+                    anchor = PointF(0.5f, 1f)
                     captionText = record.name
+                    captionTextSize = 13f
+                    zIndex = if (isSelected) 1 else 0
                     map = naverMapInstance
                     setOnClickListener {
                         onPinClickState(record.id)
@@ -387,11 +394,17 @@ private fun NaverMapSection(
         }
     }
 
-    LaunchedEffect(naverMap, records, selectedId) {
-        val naverMapInstance = naverMap ?: return@LaunchedEffect
-        records.find { it.id == selectedId }?.let { selected ->
-            naverMapInstance.moveCamera(CameraUpdate.scrollTo(LatLng(selected.latitude, selected.longitude)))
-        }
+    // 핀 선택 시 해당 위치로 부드럽게 이동(현재 줌 유지, 너무 멀면 15까지 당김)
+    LaunchedEffect(naverMap, selectedId) {
+        val map = naverMap ?: return@LaunchedEffect
+        val selected = records.find { it.id == selectedId } ?: return@LaunchedEffect
+        map.moveCamera(
+            CameraUpdate
+                .scrollAndZoomTo(
+                    LatLng(selected.latitude, selected.longitude),
+                    maxOf(map.cameraPosition.zoom, 15.0),
+                ).animate(CameraAnimation.Easing),
+        )
     }
 
     LaunchedEffect(naverMap, hasLocationPermission, locationSource) {
@@ -429,6 +442,29 @@ private fun NaverMapSection(
         AndroidView(
             modifier = modifier,
             factory = { mapView },
+        )
+    }
+}
+
+private fun frameCameraToRecords(
+    map: NaverMap,
+    records: List<SpaceRecord>,
+) {
+    if (records.size == 1) {
+        val record = records.first()
+        map.moveCamera(
+            CameraUpdate
+                .scrollAndZoomTo(LatLng(record.latitude, record.longitude), 15.0)
+                .animate(CameraAnimation.Easing),
+        )
+    } else {
+        val builder = LatLngBounds.Builder()
+        records.forEach { builder.include(LatLng(it.latitude, it.longitude)) }
+        val padding = (48 * Resources.getSystem().displayMetrics.density).toInt()
+        map.moveCamera(
+            CameraUpdate
+                .fitBounds(builder.build(), padding)
+                .animate(CameraAnimation.Easing),
         )
     }
 }

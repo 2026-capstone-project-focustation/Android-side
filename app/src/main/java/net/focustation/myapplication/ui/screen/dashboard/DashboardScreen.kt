@@ -7,6 +7,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,7 +30,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Insights
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.WbSunny
@@ -55,12 +55,16 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import net.focustation.myapplication.R
 import net.focustation.myapplication.score.ScoreCalculator
 import net.focustation.myapplication.ui.components.FocusScreenBackground
 import net.focustation.myapplication.ui.components.MainBottomDestination
@@ -249,8 +253,10 @@ private fun SurveyRetakeCard(
                 )
                 Text(
                     text = "선호가 바뀌면 집중 기준을 다시 조정해요",
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                     color = FocusMuted,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
                 )
             }
             OutlinedButton(
@@ -267,7 +273,7 @@ private fun SurveyRetakeCard(
                 Text(
                     text = "다시하기",
                     style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.Light,
                 )
             }
         }
@@ -290,9 +296,18 @@ private fun DashboardHero(name: String) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Top,
-                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
             ) {
+                Image(
+                    painter = painterResource(R.drawable.pokey_profile),
+                    contentDescription = "프로필 사진",
+                    contentScale = ContentScale.Crop,
+                    modifier =
+                        Modifier
+                            .size(64.dp)
+                            .clip(RoundedCornerShape(14.dp)),
+                )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "사용자 프로필",
@@ -302,7 +317,7 @@ private fun DashboardHero(name: String) {
                     Spacer(Modifier.height(6.dp))
                     Text(
                         text = name.dashboardDisplayName(),
-                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
+                        style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
                         color = Color.White,
                     )
                     Spacer(Modifier.height(4.dp))
@@ -310,20 +325,6 @@ private fun DashboardHero(name: String) {
                         text = "오늘의 집중 환경 기록을 확인해요",
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.White.copy(alpha = 0.60f),
-                    )
-                }
-                Box(
-                    modifier =
-                        Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(FocusYellow),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Person,
-                        contentDescription = null,
-                        tint = FocusInk,
                     )
                 }
             }
@@ -366,7 +367,7 @@ private fun DashboardCalendarStrip(days: List<WeekDaySlot>) {
                 ) {
                     Text(
                         text = day.day,
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Light),
                         color = if (day.selected) FocusInk else Color.White.copy(alpha = 0.76f),
                     )
                 }
@@ -435,7 +436,7 @@ private fun DashboardEnvironmentSummary(
                 )
                 MiniSensorCard(
                     label = "진동",
-                    value = if (hasData) "%.3f".format(vibration.coerceAtLeast(0.0)) else "--",
+                    value = if (hasData) "%.2f".format(vibration.coerceAtLeast(0.0)) else "--",
                     unit = "m/s²",
                     icon = Icons.Filled.Sensors,
                     containerColor = FocusSurface,
@@ -469,9 +470,9 @@ private fun MiniSensorCard(
         shadowElevation = 0.dp,
     ) {
         Row(
-            modifier = Modifier.fillMaxSize().padding(start = 12.dp, end = 18.dp),
+            modifier = Modifier.fillMaxSize().padding(start = 10.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
         ) {
             Box(
                 modifier =
@@ -492,20 +493,21 @@ private fun MiniSensorCard(
                 text = label,
                 style = MaterialTheme.typography.labelLarge,
                 color = contentColor.copy(alpha = 0.78f),
+                fontWeight = FontWeight.Bold,
                 maxLines = 1,
             )
             Spacer(modifier = Modifier.weight(1f))
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(
                     text = value,
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                     color = contentColor,
                     maxLines = 1,
                 )
                 Spacer(Modifier.width(4.dp))
                 Text(
                     text = unit,
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.labelSmall,
                     color = contentColor.copy(alpha = 0.7f),
                     modifier = Modifier.padding(bottom = 3.dp),
                     maxLines = 1,
@@ -567,7 +569,7 @@ private fun TotalScoreGoalCard(
                             text = score?.toString() ?: "--",
                             style = MaterialTheme.typography.displayMedium,
                             color = Color.White,
-                            fontWeight = FontWeight.ExtraBold,
+                            fontWeight = FontWeight.Bold,
                             maxLines = 1,
                         )
                         Spacer(Modifier.width(5.dp))
@@ -650,9 +652,10 @@ private fun EnvironmentCheckButton(onStartSession: () -> Unit) {
         )
         Spacer(Modifier.width(6.dp))
         Text(
-            text = "환경체크 시작",
+            text = "환경체크 시작하기",
             style = MaterialTheme.typography.labelLarge,
             color = FocusInk,
+            fontWeight = FontWeight.Bold,
         )
     }
 }
@@ -716,6 +719,7 @@ fun SectionHeader(
             text = title,
             style = MaterialTheme.typography.titleMedium,
             color = FocusInk,
+            fontWeight = FontWeight.Bold,
         )
         if (subtitle != null) {
             Text(

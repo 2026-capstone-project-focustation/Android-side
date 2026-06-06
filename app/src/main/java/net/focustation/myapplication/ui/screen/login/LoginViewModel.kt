@@ -6,6 +6,9 @@ import com.google.firebase.auth.GoogleAuthProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import net.focustation.myapplication.session.SessionPlaceSelectionStore
+import net.focustation.myapplication.session.SessionReportDraftStore
+import net.focustation.myapplication.survey.SurveyResponseStore
 
 data class LoginUiState(
     val isLoading: Boolean = false,
@@ -21,6 +24,7 @@ class LoginViewModel(
     private val authStateListener =
         FirebaseAuth.AuthStateListener { auth ->
             if (auth.currentUser != null) {
+                clearPreviousUserCache()
                 _uiState.value =
                     _uiState.value.copy(
                         isLoading = false,
@@ -64,6 +68,7 @@ class LoginViewModel(
             .signInWithCredential(credential)
             .addOnCompleteListener { task ->
                 if (task.isSuccessful) {
+                    clearPreviousUserCache()
                     _uiState.value =
                         _uiState.value.copy(
                             isLoading = false,
@@ -87,6 +92,13 @@ class LoginViewModel(
 
     fun clearError() {
         _uiState.value = _uiState.value.copy(errorMessage = null)
+    }
+
+    // 새 사용자 로그인 시 이전 사용자의 인메모리 데이터가 남지 않도록 초기화한다.
+    private fun clearPreviousUserCache() {
+        SurveyResponseStore.clear()
+        SessionReportDraftStore.clear()
+        SessionPlaceSelectionStore.clear()
     }
 
     override fun onCleared() {

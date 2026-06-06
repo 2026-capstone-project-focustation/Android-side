@@ -321,7 +321,7 @@ fun StatCard(
                 Text(
                     text = value,
                     color = ReferenceDesignTokens.TextPrimary,
-                    style = MaterialTheme.typography.headlineLarge.copy(fontSize = 31.sp),
+                    style = MaterialTheme.typography.headlineLarge.copy(fontSize = 31.sp, fontWeight = FontWeight.Bold),
                     maxLines = 1,
                 )
                 Text(
@@ -403,7 +403,7 @@ fun ProgressGaugeCard(
                 Text(
                     text = title,
                     color = ReferenceDesignTokens.TextPrimary,
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
                 )
                 Text(
                     text = subtitle,

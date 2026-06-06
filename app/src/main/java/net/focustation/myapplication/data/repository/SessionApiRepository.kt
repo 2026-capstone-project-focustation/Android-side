@@ -187,8 +187,12 @@ class SessionApiRepository(
                     }
 
                     val json = JSONObject(responseBody)
+                    val mlScore = json.optPredictionScore()
+                    if (!mlScore.isFinite() || mlScore < 0.0) {
+                        throw IOException("서버에서 유효한 예측 점수를 받지 못했어요.")
+                    }
                     CreateSessionPredictionResult(
-                        mlScore = json.optDouble("mlScore", -1.0),
+                        mlScore = mlScore,
                         avgNoise = json.optDouble("avgNoise", request.avgNoise),
                         avgIlluminance = json.optDouble("avgIlluminance", request.avgIlluminance),
                         avgVibration = json.optDouble("avgVibration", request.avgVibration),
