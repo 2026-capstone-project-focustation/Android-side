@@ -6,7 +6,6 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -15,7 +14,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -27,7 +25,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.PlayArrow
@@ -49,11 +46,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -65,7 +58,6 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import net.focustation.myapplication.R
-import net.focustation.myapplication.score.ScoreCalculator
 import net.focustation.myapplication.ui.components.FocusScreenBackground
 import net.focustation.myapplication.ui.components.MainBottomDestination
 import net.focustation.myapplication.ui.components.MainBottomNavigationBar
@@ -82,7 +74,6 @@ import net.focustation.myapplication.ui.theme.FocustationTheme
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.temporal.TemporalAdjusters
-import kotlin.math.roundToInt
 
 @Composable
 fun DashboardScreen(
@@ -384,67 +375,39 @@ private fun DashboardEnvironmentSummary(
     vibration: Double,
     onStartSession: () -> Unit,
 ) {
-    val totalScore =
-        remember(hasData, noise, illuminance, vibration) {
-            if (hasData) {
-                calculateCurrentEnvironmentScore(
-                    noise = noise,
-                    illuminance = illuminance,
-                    vibration = vibration,
-                )
-            } else {
-                null
-            }
-        }
-
     Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        Row(
+        Column(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            TotalScoreGoalCard(
-                score = totalScore,
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .height(232.dp),
+            MiniSensorCard(
+                label = "조도",
+                value = if (hasData) "%.0f".format(illuminance.coerceAtLeast(0f)) else "--",
+                unit = "lux",
+                icon = Icons.Filled.WbSunny,
+                containerColor = FocusYellow,
+                contentColor = FocusInk,
+                modifier = Modifier.height(72.dp),
             )
-            Column(
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .height(232.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                MiniSensorCard(
-                    label = "조도",
-                    value = if (hasData) "%.0f".format(illuminance.coerceAtLeast(0f)) else "--",
-                    unit = "lux",
-                    icon = Icons.Filled.WbSunny,
-                    containerColor = FocusYellow,
-                    contentColor = FocusInk,
-                    modifier = Modifier.weight(1f),
-                )
-                MiniSensorCard(
-                    label = "소음",
-                    value = if (hasData) "%.0f".format(noise.coerceAtLeast(0f)) else "--",
-                    unit = "dB",
-                    icon = Icons.Filled.GraphicEq,
-                    containerColor = FocusInk,
-                    contentColor = Color.White,
-                    modifier = Modifier.weight(1f),
-                )
-                MiniSensorCard(
-                    label = "진동",
-                    value = if (hasData) "%.2f".format(vibration.coerceAtLeast(0.0)) else "--",
-                    unit = "m/s²",
-                    icon = Icons.Filled.Sensors,
-                    containerColor = FocusSurface,
-                    contentColor = FocusInk,
-                    modifier = Modifier.weight(1f),
-                    border = BorderStroke(1.dp, FocusLine),
-                )
-            }
+            MiniSensorCard(
+                label = "소음",
+                value = if (hasData) "%.0f".format(noise.coerceAtLeast(0f)) else "--",
+                unit = "dB",
+                icon = Icons.Filled.GraphicEq,
+                containerColor = FocusInk,
+                contentColor = Color.White,
+                modifier = Modifier.height(72.dp),
+            )
+            MiniSensorCard(
+                label = "진동",
+                value = if (hasData) "%.2f".format(vibration.coerceAtLeast(0.0)) else "--",
+                unit = "m/s²",
+                icon = Icons.Filled.Sensors,
+                containerColor = FocusSurface,
+                contentColor = FocusInk,
+                modifier = Modifier.height(72.dp),
+                border = BorderStroke(1.dp, FocusLine),
+            )
         }
 
         EnvironmentCheckButton(onStartSession = onStartSession)
@@ -518,117 +481,6 @@ private fun MiniSensorCard(
 }
 
 @Composable
-private fun TotalScoreGoalCard(
-    score: Int?,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(20.dp),
-        color = FocusBlue,
-        shadowElevation = 0.dp,
-    ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            BlueWaveBackground(
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .fillMaxHeight(0.6f),
-            )
-            Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Box(
-                            modifier =
-                                Modifier
-                                    .size(28.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.White.copy(alpha = 0.20f)),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.AutoAwesome,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(16.dp),
-                            )
-                        }
-                        Text(
-                            text = "총 점수",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
-                    Row(verticalAlignment = Alignment.Bottom) {
-                        Text(
-                            text = score?.toString() ?: "--",
-                            style = MaterialTheme.typography.displayMedium,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                        )
-                        Spacer(Modifier.width(5.dp))
-                        Text(
-                            text = "점",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = Color.White.copy(alpha = 0.78f),
-                            modifier = Modifier.padding(bottom = 10.dp),
-                            maxLines = 1,
-                        )
-                    }
-                    Text(
-                        text = environmentScoreLabel(score),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.82f),
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun BlueWaveBackground(modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier) {
-        val values = listOf(0.28f, 0.58f, 0.52f, 0.72f, 0.36f, 0.66f, 0.42f)
-        if (values.size < 2) return@Canvas
-        val step = size.width / (values.size - 1)
-        val points =
-            values.mapIndexed { i, v ->
-                Offset(x = step * i, y = size.height * (1f - v.coerceIn(0f, 1f)))
-            }
-        val linePath =
-            Path().apply {
-                moveTo(points.first().x, points.first().y)
-                for (idx in 1 until points.size) {
-                    val prev = points[idx - 1]
-                    val curr = points[idx]
-                    val cx = (prev.x + curr.x) / 2f
-                    cubicTo(cx, prev.y, cx, curr.y, curr.x, curr.y)
-                }
-            }
-        val fillPath =
-            Path().apply {
-                addPath(linePath)
-                lineTo(size.width, size.height)
-                lineTo(0f, size.height)
-                close()
-            }
-        drawPath(fillPath, Color.White.copy(alpha = 0.12f))
-        drawPath(
-            path = linePath,
-            color = Color.White.copy(alpha = 0.42f),
-            style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round),
-        )
-    }
-}
-
-@Composable
 private fun EnvironmentCheckButton(onStartSession: () -> Unit) {
     OutlinedButton(
         onClick = onStartSession,
@@ -669,41 +521,6 @@ private fun firstLaunchPermissions(): Array<String> =
             add(Manifest.permission.POST_NOTIFICATIONS)
         }
     }.toTypedArray()
-
-private fun calculateCurrentEnvironmentScore(
-    noise: Float,
-    illuminance: Float,
-    vibration: Double,
-): Int {
-    if (noise <= 0f && illuminance <= 0f && vibration <= 0.0) return 0
-
-    val scores =
-        listOfNotNull(
-            illuminance
-                .takeIf { it > 0f }
-                ?.let { ScoreCalculator.calculateLightScore(listOf(it)) },
-            noise
-                .takeIf { it > 0f }
-                ?.let { ScoreCalculator.calculateNoiseScore(listOf(it.toDouble())) },
-            vibration
-                .takeIf { it > 0.0 }
-                ?.let { ScoreCalculator.calculateVibrationScore(listOf(it)) },
-        )
-
-    return ScoreCalculator
-        .calculateTotalScore(scores)
-        .roundToInt()
-        .coerceIn(0, 100)
-}
-
-private fun environmentScoreLabel(score: Int?): String =
-    when {
-        score == null -> "최근 측정 기록 없음"
-        score >= 80 -> "집중하기 좋은 공간"
-        score >= 60 -> "무난한 집중 환경"
-        score > 0 -> "조정이 필요한 공간"
-        else -> "측정 전 대기"
-    }
 
 @Composable
 fun SectionHeader(
