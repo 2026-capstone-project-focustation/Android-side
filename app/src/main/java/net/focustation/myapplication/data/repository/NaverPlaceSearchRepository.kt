@@ -33,10 +33,13 @@ class NaverPlaceSearchRepository(
                 error("NAVER_SEARCH_CLIENT_ID 또는 NAVER_SEARCH_CLIENT_SECRET이 설정되지 않았어요.")
             }
 
+            val sanitizedQuery = query.normalizeSearchQuery().take(MAX_QUERY_LENGTH)
+            val sanitizedAddressHint = addressHint.normalizeSearchQuery().take(MAX_ADDRESS_HINT_LENGTH)
             val normalizedQuery =
-                listOf(addressHint, query)
+                listOf(sanitizedAddressHint, sanitizedQuery)
                     .filter { it.isNotBlank() }
                     .joinToString(" ")
+                    .take(MAX_NORMALIZED_QUERY_LENGTH)
             if (normalizedQuery.isBlank()) return@runCatching emptyList()
 
             withContext(Dispatchers.IO) {
@@ -130,11 +133,30 @@ class NaverPlaceSearchRepository(
             .replace("&quot;", "\"")
             .trim()
 
-    private fun NaverPlaceSearchResult.uniqueKey(): String =
-        listOf(name, roadAddress, address, latitude, longitude).joinToString("|")
+    private fun String.normalizeSearchQuery(): String = trim().replace(Regex("\\s+"), " ")
+
+    private fun NaverPlaceSearchResult.uniqueKey(): String {
+        val locationKey =
+            if (latitude != null && longitude != null) {
+                "%.6f,%.6f".format(latitude, longitude)
+            } else {
+                ""
+            }
+        return listOf(
+            name.normalizePlaceKey(),
+            roadAddress.normalizePlaceKey(),
+            address.normalizePlaceKey(),
+            locationKey,
+        ).joinToString("|")
+    }
+
+    private fun String.normalizePlaceKey(): String = trim().lowercase().replace(Regex("\\s+"), " ")
 
     private companion object {
         private const val MAX_ERROR_BODY_LENGTH = 500
+        private const val MAX_QUERY_LENGTH = 80
+        private const val MAX_ADDRESS_HINT_LENGTH = 80
+        private const val MAX_NORMALIZED_QUERY_LENGTH = 160
         private const val LOCAL_SEARCH_PAGE_SIZE = 5
         private const val LOCAL_SEARCH_PAGE_COUNT = 10
     }

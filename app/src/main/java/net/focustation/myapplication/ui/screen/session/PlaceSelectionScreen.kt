@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -142,15 +143,23 @@ class PlaceSelectionViewModel(
 
     fun updateQuery(query: String) {
         searchJob?.cancel()
+        val normalizedQuery = query.normalizeSearchQuery()
+        val limitedQuery = normalizedQuery.take(MAX_PLACE_SEARCH_QUERY_LENGTH)
+        val queryError =
+            if (normalizedQuery.length > MAX_PLACE_SEARCH_QUERY_LENGTH) {
+                "검색어는 ${MAX_PLACE_SEARCH_QUERY_LENGTH}자까지 입력할 수 있어요."
+            } else {
+                null
+            }
         _uiState.update {
             it.copy(
-                query = query,
+                query = limitedQuery,
                 manualPlaceName = "",
                 selectedPlace = null,
                 shouldShowResultsSheet = false,
                 results = emptyList(),
                 resultQueryLabel = "",
-                errorMessage = null,
+                errorMessage = queryError,
             )
         }
     }
@@ -264,12 +273,25 @@ class PlaceSelectionViewModel(
 
     private suspend fun performSearch(allowFallback: Boolean = false) {
         val state = _uiState.value
-        val typedQuery = state.query.trim()
+        val typedQuery = state.query.normalizeSearchQuery()
+        if (typedQuery.length > MAX_PLACE_SEARCH_QUERY_LENGTH) {
+            _uiState.update {
+                it.copy(
+                    isSearching = false,
+                    results = emptyList(),
+                    selectedPlace = null,
+                    shouldShowResultsSheet = true,
+                    resultQueryLabel = typedQuery.toDisplayQueryLabel(),
+                    errorMessage = "검색어는 ${MAX_PLACE_SEARCH_QUERY_LENGTH}자 이하로 입력해주세요.",
+                )
+            }
+            return
+        }
         val fallbackQuery = MAP_AREA_QUERY.takeIf { allowFallback }.orEmpty()
         val requestedQuery =
             typedQuery.takeIf { it.isNotBlank() }
                 ?: fallbackQuery
-        val resultQueryLabel = requestedQuery
+        val resultQueryLabel = requestedQuery.toDisplayQueryLabel()
         if (requestedQuery.isBlank()) {
             _uiState.update {
                 it.copy(
@@ -639,11 +661,15 @@ private fun PlaceResultsContent(
                     text = "주변 장소",
                     color = ReferenceDesignTokens.TextPrimary,
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = resultSummary(uiState),
                     color = ReferenceDesignTokens.TextSecondary,
                     style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
             uiState.selectedPlace?.let {
@@ -651,6 +677,8 @@ private fun PlaceResultsContent(
                     text = "선택됨",
                     color = ReferenceDesignTokens.BlueDark,
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -672,7 +700,10 @@ private fun PlaceResultsContent(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(bottom = 18.dp),
             ) {
-                items(uiState.results, key = { "${it.name}-${it.roadAddress}-${it.address}" }) { place ->
+                itemsIndexed(
+                    items = uiState.results,
+                    key = { index, place -> place.stableLazyKey(index) },
+                ) { _, place ->
                     PlaceResultCard(
                         place = place,
                         selected = uiState.selectedPlace == place,
@@ -1000,6 +1031,8 @@ private fun MessageCard(message: String) {
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
             color = ReferenceDesignTokens.TextPrimary,
             style = MaterialTheme.typography.bodySmall,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -1055,6 +1088,16 @@ private fun NaverPlaceSearchResult.toLatLngOrNull(): LatLng? {
     return LatLng(latitude, longitude).takeIf { it.isValid() }
 }
 
+private fun NaverPlaceSearchResult.stableLazyKey(index: Int): String =
+    listOf(
+        index,
+        name,
+        roadAddress,
+        address,
+        latitude,
+        longitude,
+    ).joinToString("|")
+
 private const val LOCATION_PERMISSION_REQUEST_CODE = 1001
 private const val NAVER_MAP_MCP_ID_META_KEY = "com.naver.maps.map.MCP_ID"
 private const val KEYBOARD_SHOW_DELAY_MS = 250L
@@ -1063,6 +1106,8 @@ private const val KEYBOARD_SHOW_ATTEMPTS = 3
 private const val DEFAULT_MAP_ZOOM = 15.0
 private const val SELECTED_MAP_ZOOM = 16.5
 private const val MAP_AREA_QUERY = "가게"
+private const val MAX_PLACE_SEARCH_QUERY_LENGTH = 80
+private const val DISPLAY_QUERY_LABEL_LENGTH = 30
 
 private val LOCATION_PERMISSIONS =
     arrayOf(
@@ -1092,6 +1137,15 @@ private fun Context.hasNaverMapMcpIdConfigured(): Boolean =
                 .trim()
         clientId.isNotEmpty() && !clientId.startsWith("\${")
     }.getOrDefault(false)
+
+private fun String.normalizeSearchQuery(): String = trim().replace(Regex("\\s+"), " ")
+
+private fun String.toDisplayQueryLabel(): String =
+    if (length <= DISPLAY_QUERY_LABEL_LENGTH) {
+        this
+    } else {
+        "${take(DISPLAY_QUERY_LABEL_LENGTH)}..."
+    }
 
 @androidx.compose.ui.tooling.preview.Preview(showBackground = true)
 @Composable
