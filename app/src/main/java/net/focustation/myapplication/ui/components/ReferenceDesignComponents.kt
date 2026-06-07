@@ -137,7 +137,7 @@ fun ReferencePhoneSurface(
         modifier =
             modifier
                 .shadow(
-                    elevation = 18.dp,
+                    elevation = 0.dp,
                     shape = RoundedCornerShape(ReferenceDesignTokens.PhoneRadius),
                     ambientColor = Color(0xFF91A5BC).copy(alpha = 0.16f),
                     spotColor = Color(0xFF91A5BC).copy(alpha = 0.20f),
@@ -744,7 +744,7 @@ fun ReferenceBottomNavigationBar(
                 .width(260.dp)
                 .height(62.dp)
                 .shadow(
-                    elevation = 12.dp,
+                    elevation = 0.dp,
                     shape = RoundedCornerShape(ReferenceDesignTokens.NavRadius),
                     ambientColor = Color.Black.copy(alpha = 0.12f),
                     spotColor = Color.Black.copy(alpha = 0.16f),
@@ -954,7 +954,7 @@ private fun ReferenceDesignShowcasePreview() {
 
 private fun Modifier.referenceShadow(radius: Dp): Modifier =
     shadow(
-        elevation = radius / 2,
+        elevation = 0.dp,
         shape = RoundedCornerShape(ReferenceDesignTokens.LargeRadius),
         ambientColor = Color(0xFF91A5BC).copy(alpha = 0.12f),
         spotColor = Color(0xFF91A5BC).copy(alpha = 0.18f),

@@ -439,7 +439,7 @@ private fun QuestionCard(
                 .fillMaxWidth()
                 .padding(top = 18.dp, bottom = 16.dp)
                 .shadow(
-                    elevation = 14.dp,
+                    elevation = 0.dp,
                     shape = RoundedCornerShape(26.dp),
                     ambientColor = Color(0xFF91A5BC).copy(alpha = 0.10f),
                     spotColor = Color(0xFF91A5BC).copy(alpha = 0.16f),
@@ -510,7 +510,7 @@ private fun SurveyBottomBar(
 ) {
     Surface(
         color = ReferenceDesignTokens.WhiteCard,
-        shadowElevation = 10.dp,
+        shadowElevation = 0.dp,
     ) {
         Row(
             modifier =

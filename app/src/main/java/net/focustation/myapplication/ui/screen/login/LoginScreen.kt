@@ -151,7 +151,7 @@ fun LoginScreen(
                         .fillMaxWidth()
                         .height(60.dp)
                         .shadow(
-                            elevation = 14.dp,
+                            elevation = 0.dp,
                             shape = CircleShape,
                             ambientColor = ReferenceDesignTokens.Dark.copy(alpha = 0.18f),
                             spotColor = ReferenceDesignTokens.Dark.copy(alpha = 0.28f),

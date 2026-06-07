@@ -214,6 +214,7 @@ private fun MapNoticeLayer(
                     CardDefaults.elevatedCardColors(
                         containerColor = MaterialTheme.colorScheme.errorContainer,
                     ),
+                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 0.dp),
             ) {
                 Text(
                     text = "NAVER_MAP_MCP_ID가 비어 있어요. local.properties 또는 gradle.properties를 확인해주세요.",
@@ -229,6 +230,7 @@ private fun MapNoticeLayer(
                     CardDefaults.elevatedCardColors(
                         containerColor = MaterialTheme.colorScheme.errorContainer,
                     ),
+                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 0.dp),
             ) {
                 Text(
                     text = errorMessage,
@@ -244,6 +246,7 @@ private fun MapNoticeLayer(
                     CardDefaults.elevatedCardColors(
                         containerColor = MaterialTheme.colorScheme.surface,
                     ),
+                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 0.dp),
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
@@ -481,7 +484,7 @@ private fun SpaceDetailPopup(
                 .fillMaxWidth()
                 .padding(16.dp),
         shape = RoundedCornerShape(20.dp),
-        elevation = CardDefaults.cardElevation(8.dp),
+        elevation = CardDefaults.cardElevation(0.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {

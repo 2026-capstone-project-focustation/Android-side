@@ -282,7 +282,7 @@ private fun SessionDetailHero(session: StudySessionRecord) {
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(ReferenceDesignTokens.LargeRadius),
         color = ReferenceDesignTokens.Dark,
-        shadowElevation = 8.dp,
+        shadowElevation = 0.dp,
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
@@ -417,7 +417,7 @@ private fun SensorTimelineCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(ReferenceDesignTokens.LargeRadius),
         color = ReferenceDesignTokens.WhiteCard,
-        shadowElevation = 8.dp,
+        shadowElevation = 0.dp,
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 15.dp),
@@ -540,7 +540,7 @@ private fun AnalysisMetricCard(
         modifier = modifier.height(128.dp),
         shape = RoundedCornerShape(ReferenceDesignTokens.SmallRadius),
         color = ReferenceDesignTokens.WhiteCard,
-        shadowElevation = 6.dp,
+        shadowElevation = 0.dp,
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 13.dp, vertical = 12.dp),
@@ -578,7 +578,7 @@ private fun SessionMetaSection(session: StudySessionRecord) {
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(ReferenceDesignTokens.LargeRadius),
         color = ReferenceDesignTokens.WhiteCard,
-        shadowElevation = 8.dp,
+        shadowElevation = 0.dp,
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),

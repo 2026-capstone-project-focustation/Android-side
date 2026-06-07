@@ -441,7 +441,7 @@ private fun PlaceSelectionHeader(onBack: () -> Unit) {
         Surface(
             shape = RoundedCornerShape(18.dp),
             color = ReferenceDesignTokens.WhiteCard,
-            shadowElevation = 2.dp,
+            shadowElevation = 0.dp,
         ) {
             Text(
                 text = "장소 지정",
@@ -496,7 +496,7 @@ private fun PlaceSearchOverlay(
         shape = RoundedCornerShape(24.dp),
         color = ReferenceDesignTokens.WhiteCard,
         border = BorderStroke(1.dp, ReferenceDesignTokens.Border),
-        shadowElevation = 4.dp,
+        shadowElevation = 0.dp,
     ) {
         Column(
             modifier = Modifier.padding(14.dp),
@@ -569,7 +569,7 @@ private fun PlaceResultsSheet(
         shape = RoundedCornerShape(24.dp),
         color = ReferenceDesignTokens.WhiteCard,
         border = BorderStroke(1.dp, ReferenceDesignTokens.Border),
-        shadowElevation = 8.dp,
+        shadowElevation = 0.dp,
     ) {
         Column(
             modifier = Modifier.padding(14.dp),
