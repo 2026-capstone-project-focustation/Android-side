@@ -41,41 +41,57 @@ class NaverPlaceSearchRepository(
 
             withContext(Dispatchers.IO) {
                 val encodedQuery = URLEncoder.encode(normalizedQuery, Charsets.UTF_8.name())
-                val endpoint =
-                    "https://openapi.naver.com/v1/search/local.json" +
-                        "?query=$encodedQuery&display=5&start=1&sort=random"
-                val connection = URI.create(endpoint).toURL().openConnection() as HttpURLConnection
-                try {
-                    connection.requestMethod = "GET"
-                    connection.connectTimeout = 15_000
-                    connection.readTimeout = 15_000
-                    connection.setRequestProperty("Accept", "application/json")
-                    connection.setRequestProperty("X-Naver-Client-Id", clientId)
-                    connection.setRequestProperty("X-Naver-Client-Secret", clientSecret)
-
-                    val responseCode = connection.responseCode
-                    val responseBody =
-                        if (responseCode in 200..299) {
-                            connection.inputStream.bufferedReader().use { it.readText() }
-                        } else {
-                            connection.errorStream
-                                ?.bufferedReader()
-                                ?.use { it.readText() }
-                                .orEmpty()
-                        }
-
-                    if (responseCode !in 200..299) {
-                        throw IOException(
-                            "Naver 장소 검색 실패 ($responseCode): ${responseBody.take(MAX_ERROR_BODY_LENGTH)}",
-                        )
+                val places = mutableListOf<NaverPlaceSearchResult>()
+                repeat(LOCAL_SEARCH_PAGE_COUNT) { pageIndex ->
+                    val start = pageIndex * LOCAL_SEARCH_PAGE_SIZE + 1
+                    val pagePlaces = fetchSearchPage(encodedQuery, start)
+                    places += pagePlaces
+                    if (pagePlaces.size < LOCAL_SEARCH_PAGE_SIZE) {
+                        return@withContext places.distinctBy { it.uniqueKey() }
                     }
-
-                    parsePlaces(responseBody)
-                } finally {
-                    connection.disconnect()
                 }
+                places.distinctBy { it.uniqueKey() }
             }
         }
+
+    private fun fetchSearchPage(
+        encodedQuery: String,
+        start: Int,
+    ): List<NaverPlaceSearchResult> {
+        val endpoint =
+            "https://openapi.naver.com/v1/search/local.json" +
+                "?query=$encodedQuery&display=$LOCAL_SEARCH_PAGE_SIZE&start=$start&sort=comment"
+        val connection = URI.create(endpoint).toURL().openConnection() as HttpURLConnection
+        try {
+            connection.requestMethod = "GET"
+            connection.connectTimeout = 15_000
+            connection.readTimeout = 15_000
+            connection.setRequestProperty("Accept", "application/json")
+            connection.setRequestProperty("X-Naver-Client-Id", clientId)
+            connection.setRequestProperty("X-Naver-Client-Secret", clientSecret)
+
+            val responseCode = connection.responseCode
+            val responseBody =
+                if (responseCode in 200..299) {
+                    connection.inputStream.bufferedReader().use { it.readText() }
+                } else {
+                    connection.errorStream
+                        ?.bufferedReader()
+                        ?.use { it.readText() }
+                        .orEmpty()
+                }
+
+            if (responseCode !in 200..299) {
+                throw IOException(
+                    "Naver 장소 검색 실패 ($responseCode): ${responseBody.take(MAX_ERROR_BODY_LENGTH)}",
+                )
+            }
+
+            return parsePlaces(responseBody)
+        } finally {
+            connection.disconnect()
+        }
+    }
 
     private fun parsePlaces(responseBody: String): List<NaverPlaceSearchResult> {
         val items = JSONObject(responseBody).optJSONArray("items") ?: return emptyList()
@@ -114,7 +130,12 @@ class NaverPlaceSearchRepository(
             .replace("&quot;", "\"")
             .trim()
 
+    private fun NaverPlaceSearchResult.uniqueKey(): String =
+        listOf(name, roadAddress, address, latitude, longitude).joinToString("|")
+
     private companion object {
         private const val MAX_ERROR_BODY_LENGTH = 500
+        private const val LOCAL_SEARCH_PAGE_SIZE = 5
+        private const val LOCAL_SEARCH_PAGE_COUNT = 10
     }
 }
