@@ -1,5 +1,6 @@
 package net.focustation.myapplication.ui.screen.report
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -21,6 +22,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.AccessTime
@@ -110,6 +112,30 @@ fun SessionReportScreen(
         }
     val totalMinutes = uiState.history.sumOf { it.durationMinutes }
 
+    // 장소순에서 같은 장소를 하나로 묶어 그룹 카드로 보여주기 위한 상태/목록
+    var selectedPlace by remember { mutableStateOf<String?>(null) }
+    val placeGroups =
+        remember(uiState.history) {
+            uiState.history
+                .groupBy { it.placeName.ifBlank { "장소 미지정" } }
+                .map { (place, items) -> place to items.sortedByDescending { it.endedAtEpochMillis } }
+                .sortedBy { it.first }
+        }
+    val placeVisits =
+        remember(uiState.history, selectedPlace) {
+            val place = selectedPlace ?: return@remember emptyList<StudyHistoryUiItem>()
+            uiState.history
+                .filter { it.placeName.ifBlank { "장소 미지정" } == place }
+                .sortedByDescending { it.endedAtEpochMillis }
+        }
+
+    // 정렬을 바꾸면 드릴다운 해제, 선택한 장소의 기록이 모두 사라지면 목록으로 복귀
+    LaunchedEffect(uiState.sortOption) { selectedPlace = null }
+    LaunchedEffect(placeVisits, selectedPlace) {
+        if (selectedPlace != null && placeVisits.isEmpty()) selectedPlace = null
+    }
+    BackHandler(enabled = selectedPlace != null) { selectedPlace = null }
+
     Scaffold(
         containerColor = FocusCanvas,
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -137,94 +163,144 @@ fun SessionReportScreen(
                     ReportArchiveHero()
                 }
 
-                item {
-                    Row(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        StatCard(
-                            value = uiState.history.size.toString(),
-                            label = "저장 세션",
-                            icon = Icons.Outlined.FolderOpen,
-                            iconColor = FocusBlue,
-                            modifier = Modifier.weight(1f),
-                        )
-                        StatCard(
-                            value = totalMinutes.formatTotalTime(),
-                            label = "누적 시간",
-                            icon = Icons.Outlined.AccessTime,
-                            iconColor = FocusYellow,
-                            modifier = Modifier.weight(1f),
-                        )
+                if (selectedPlace == null) {
+                    item {
+                        Row(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            StatCard(
+                                value = uiState.history.size.toString(),
+                                label = "저장 세션",
+                                icon = Icons.Outlined.FolderOpen,
+                                iconColor = FocusBlue,
+                                modifier = Modifier.weight(1f),
+                            )
+                            StatCard(
+                                value = totalMinutes.formatTotalTime(),
+                                label = "누적 시간",
+                                icon = Icons.Outlined.AccessTime,
+                                iconColor = FocusYellow,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
                     }
-                }
 
-                item {
-                    Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-                        ProgressGaugeCard(
-                            title = "환경적합도 점수",
-                            subtitle =
-                                if (mlScores.isEmpty()) {
-                                    "ML 환경적합도 점수가 생성되면 표시돼요."
+                    item {
+                        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                            ProgressGaugeCard(
+                                title = "환경적합도 점수",
+                                subtitle =
+                                    if (mlScores.isEmpty()) {
+                                        "ML 환경적합도 점수가 생성되면 표시돼요."
+                                    } else {
+                                        "ML 기준 ${mlScores.size}개 세션 평균은 ${averageScore.toInt()}점이에요."
+                                    },
+                                percent = (averageScore / 100f).coerceIn(0f, 1f),
+                            )
+                        }
+                    }
+
+                    item {
+                        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                            ArchiveSectionHeader(
+                                title = "세션 보관함",
+                                onRefresh = viewModel::refreshHistory,
+                            )
+                            Spacer(Modifier.height(14.dp))
+                            ReportSortChips(
+                                selected = uiState.sortOption,
+                                onSortChange = viewModel::setSortOption,
+                            )
+                        }
+                    }
+
+                    when {
+                        uiState.isLoadingHistory -> {
+                            item { ArchiveLoadingState() }
+                        }
+
+                        uiState.historyErrorMessage != null -> {
+                            item {
+                                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                                    ErrorState(
+                                        message = uiState.historyErrorMessage ?: "기록을 불러오지 못했어요.",
+                                        onRefresh = viewModel::refreshHistory,
+                                    )
+                                }
+                            }
+                        }
+
+                        sortedHistory.isEmpty() -> {
+                            item {
+                                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                                    EmptyArchiveState()
+                                }
+                            }
+                        }
+
+                        uiState.sortOption == ReportSortOption.PLACE_NAME -> {
+                            placeGroups.forEach { (place, visits) ->
+                                if (visits.size == 1) {
+                                    val only = visits.first()
+                                    item(key = only.sessionId) {
+                                        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                                            SessionReportCard(
+                                                item = only,
+                                                isDeleting = uiState.deletingSessionIds.contains(only.sessionId),
+                                                onClick = { onHistoryItemClick(only.sessionId) },
+                                                onDeleteClick = { pendingDeleteItem = only },
+                                            )
+                                        }
+                                    }
                                 } else {
-                                    "ML 기준 ${mlScores.size}개 세션 평균은 ${averageScore.toInt()}점이에요."
-                                },
-                            percent = (averageScore / 100f).coerceIn(0f, 1f),
-                        )
-                    }
-                }
+                                    item(key = "group:$place") {
+                                        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                                            PlaceGroupCard(
+                                                placeName = place,
+                                                visits = visits,
+                                                onClick = { selectedPlace = place },
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
 
-                item {
-                    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                        ArchiveSectionHeader(
-                            title = "세션 보관함",
-                            onRefresh = viewModel::refreshHistory,
-                        )
-                        Spacer(Modifier.height(14.dp))
-                        ReportSortChips(
-                            selected = uiState.sortOption,
-                            onSortChange = viewModel::setSortOption,
-                        )
-                    }
-                }
-
-                when {
-                    uiState.isLoadingHistory -> {
-                        item { ArchiveLoadingState() }
-                    }
-
-                    uiState.historyErrorMessage != null -> {
-                        item {
-                            Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-                                ErrorState(
-                                    message = uiState.historyErrorMessage ?: "기록을 불러오지 못했어요.",
-                                    onRefresh = viewModel::refreshHistory,
-                                )
+                        else -> {
+                            items(sortedHistory, key = { it.sessionId }) { historyItem ->
+                                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                                    SessionReportCard(
+                                        item = historyItem,
+                                        isDeleting = uiState.deletingSessionIds.contains(historyItem.sessionId),
+                                        onClick = { onHistoryItemClick(historyItem.sessionId) },
+                                        onDeleteClick = { pendingDeleteItem = historyItem },
+                                    )
+                                }
                             }
                         }
                     }
-
-                    sortedHistory.isEmpty() -> {
-                        item {
-                            Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-                                EmptyArchiveState()
-                            }
+                } else {
+                    item {
+                        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                            PlaceDetailHeader(
+                                placeName = selectedPlace.orEmpty(),
+                                visitCount = placeVisits.size,
+                                onBack = { selectedPlace = null },
+                            )
                         }
                     }
-
-                    else -> {
-                        items(sortedHistory, key = { it.sessionId }) { historyItem ->
-                            Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-                                SessionReportCard(
-                                    item = historyItem,
-                                    isDeleting = uiState.deletingSessionIds.contains(historyItem.sessionId),
-                                    onClick = { onHistoryItemClick(historyItem.sessionId) },
-                                    onDeleteClick = { pendingDeleteItem = historyItem },
-                                )
-                            }
+                    items(placeVisits, key = { it.sessionId }) { visit ->
+                        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                            PlaceVisitCard(
+                                item = visit,
+                                isDeleting = uiState.deletingSessionIds.contains(visit.sessionId),
+                                onClick = { onHistoryItemClick(visit.sessionId) },
+                                onDeleteClick = { pendingDeleteItem = visit },
+                            )
                         }
                     }
                 }
@@ -463,6 +539,197 @@ private fun SessionReportCard(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun PlaceGroupCard(
+    placeName: String,
+    visits: List<StudyHistoryUiItem>,
+    onClick: () -> Unit,
+) {
+    val scores = visits.mapNotNull { it.displayMlScore() }
+    val avgScore = if (scores.isNotEmpty()) scores.average().toInt() else null
+    val latestMillis = visits.maxOfOrNull { it.endedAtEpochMillis } ?: 0L
+    Surface(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick),
+        shape = RoundedCornerShape(18.dp),
+        color = FocusSurface,
+        border = BorderStroke(1.dp, FocusLine),
+        shadowElevation = 0.dp,
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            ScoreBadge(score = avgScore)
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = placeName.ifBlank { "장소 미지정" },
+                    color = FocusInk,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = "기록 ${visits.size}개",
+                    color = FocusMuted,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                )
+                Text(
+                    text = "최근 ${formatDate(latestMillis)}",
+                    color = FocusMuted,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                )
+            }
+            Box(
+                modifier =
+                    Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(ReferenceDesignTokens.PaleBlueTrack),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = "방문 기록 보기",
+                    tint = FocusInk,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlaceVisitCard(
+    item: StudyHistoryUiItem,
+    isDeleting: Boolean,
+    onClick: () -> Unit,
+    onDeleteClick: () -> Unit,
+) {
+    Surface(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(enabled = !isDeleting, onClick = onClick),
+        shape = RoundedCornerShape(18.dp),
+        color = FocusSurface,
+        border = BorderStroke(1.dp, FocusLine),
+        shadowElevation = 0.dp,
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            ScoreBadge(score = item.displayScore())
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = formatDate(item.endedAtEpochMillis),
+                    color = FocusInk,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = item.scoreSummaryLabel(),
+                    color = FocusMuted,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                IconButton(
+                    onClick = onDeleteClick,
+                    enabled = !isDeleting,
+                    modifier =
+                        Modifier
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFFFECEC)),
+                ) {
+                    Icon(
+                        Icons.Outlined.Delete,
+                        contentDescription = "리포트 삭제",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+                Box(
+                    modifier =
+                        Modifier
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .background(ReferenceDesignTokens.PaleBlueTrack),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = "상세 보기",
+                        tint = FocusInk,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlaceDetailHeader(
+    placeName: String,
+    visitCount: Int,
+    onBack: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(ReferenceDesignTokens.PaleBlueTrack)
+                    .clickable(onClick = onBack),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "장소 목록으로",
+                tint = FocusInk,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = placeName.ifBlank { "장소 미지정" },
+                color = FocusInk,
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = "방문 기록 ${visitCount}개",
+                color = FocusMuted,
+                style = MaterialTheme.typography.labelSmall,
+            )
         }
     }
 }
