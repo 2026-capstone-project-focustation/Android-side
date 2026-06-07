@@ -3,6 +3,7 @@ package net.focustation.myapplication.ui.screen.session
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -90,6 +91,7 @@ class EnvironmentSessionViewModel(
                     recalculate()
                 }
             }.onFailure { error ->
+                if (error is CancellationException) throw error
                 DebugLog.e("[집중세션][조도측정] 실패: ${error.message}", error)
             }
         }
@@ -103,6 +105,7 @@ class EnvironmentSessionViewModel(
                     recalculate()
                 }
             }.onFailure { error ->
+                if (error is CancellationException) throw error
                 DebugLog.e("[집중세션][진동측정] 실패: ${error.message}", error)
             }
         }
@@ -414,6 +417,7 @@ class FocusSessionViewModel(
                     updateSensorSnapshot()
                 }
             }.onFailure { error ->
+                if (error is CancellationException) throw error
                 DebugLog.e("[집중세션][조도측정] 실패: ${error.message}", error)
             }
         }
@@ -429,6 +433,7 @@ class FocusSessionViewModel(
                     updateSensorSnapshot()
                 }
             }.onFailure { error ->
+                if (error is CancellationException) throw error
                 DebugLog.e("[집중세션][진동측정] 실패: ${error.message}", error)
             }
         }

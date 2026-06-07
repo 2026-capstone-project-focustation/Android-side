@@ -117,7 +117,7 @@ fun SessionReportScreen(
     val placeGroups =
         remember(uiState.history) {
             uiState.history
-                .groupBy { it.placeName.ifBlank { "장소 미지정" } }
+                .groupBy { it.placeName.ifBlank { UNSPECIFIED_PLACE } }
                 .map { (place, items) -> place to items.sortedByDescending { it.endedAtEpochMillis } }
                 .sortedBy { it.first }
         }
@@ -125,7 +125,7 @@ fun SessionReportScreen(
         remember(uiState.history, selectedPlace) {
             val place = selectedPlace ?: return@remember emptyList<StudyHistoryUiItem>()
             uiState.history
-                .filter { it.placeName.ifBlank { "장소 미지정" } == place }
+                .filter { it.placeName.ifBlank { UNSPECIFIED_PLACE } == place }
                 .sortedByDescending { it.endedAtEpochMillis }
         }
 
@@ -486,7 +486,7 @@ private fun SessionReportCard(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Text(
-                    text = item.placeName.ifBlank { "장소 미지정" },
+                    text = item.placeName.ifBlank { UNSPECIFIED_PLACE },
                     color = FocusInk,
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     maxLines = 1,
@@ -573,7 +573,7 @@ private fun PlaceGroupCard(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Text(
-                    text = placeName.ifBlank { "장소 미지정" },
+                    text = placeName.ifBlank { UNSPECIFIED_PLACE },
                     color = FocusInk,
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     maxLines = 1,
@@ -719,7 +719,7 @@ private fun PlaceDetailHeader(
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = placeName.ifBlank { "장소 미지정" },
+                text = placeName.ifBlank { UNSPECIFIED_PLACE },
                 color = FocusInk,
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 maxLines = 1,
@@ -832,6 +832,8 @@ private fun EmptyArchiveState() {
         }
     }
 }
+
+private const val UNSPECIFIED_PLACE = "장소 미지정"
 
 private fun Int.formatTotalTime(): String {
     val safeMinutes = coerceAtLeast(0)

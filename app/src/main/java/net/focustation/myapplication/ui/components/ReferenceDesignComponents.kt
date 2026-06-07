@@ -510,7 +510,7 @@ fun MiniMetricCardBlue(
         modifier =
             modifier
                 .height(cardHeight)
-                .referenceShadow(20.dp),
+                .referenceShadow(),
         shape = RoundedCornerShape(ReferenceDesignTokens.LargeRadius),
         color = ReferenceDesignTokens.Blue,
     ) {
@@ -541,7 +541,7 @@ fun MiniMetricCardYellow(
         modifier =
             modifier
                 .height(cardHeight)
-                .referenceShadow(20.dp),
+                .referenceShadow(),
         shape = RoundedCornerShape(ReferenceDesignTokens.LargeRadius),
         color = ReferenceDesignTokens.Yellow,
     ) {
@@ -655,7 +655,7 @@ fun WorkoutListItem(
             modifier
                 .fillMaxWidth()
                 .height(78.dp)
-                .referenceShadow(18.dp)
+                .referenceShadow()
                 .clickable(onClick = onClick),
         shape = RoundedCornerShape(ReferenceDesignTokens.LargeRadius),
         color = ReferenceDesignTokens.WhiteCard,
@@ -952,7 +952,7 @@ private fun ReferenceDesignShowcasePreview() {
     }
 }
 
-private fun Modifier.referenceShadow(radius: Dp): Modifier =
+private fun Modifier.referenceShadow(): Modifier =
     shadow(
         elevation = 0.dp,
         shape = RoundedCornerShape(ReferenceDesignTokens.LargeRadius),
@@ -976,7 +976,7 @@ private fun ActionCard(
         modifier =
             modifier
                 .height(164.dp)
-                .referenceShadow(18.dp)
+                .referenceShadow()
                 .clickable(onClick = onClick),
         shape = RoundedCornerShape(ReferenceDesignTokens.LargeRadius),
         color = containerColor,
