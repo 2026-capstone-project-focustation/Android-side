@@ -94,7 +94,7 @@ class SessionApiRepository(
                     ?: error("로그인 후 세션을 저장할 수 있어요.")
 
             withContext(Dispatchers.IO) {
-                val endpoint = "${baseUrl.trimEnd('/')}/sessions"
+                val endpoint = "${baseUrl.trimEnd('/')}/sessionsV2"
                 val connection = URI.create(endpoint).toURL().openConnection() as HttpURLConnection
                 try {
                     val body = request.toJson().toString()

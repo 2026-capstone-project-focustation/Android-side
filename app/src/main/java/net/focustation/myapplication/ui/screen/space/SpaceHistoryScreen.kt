@@ -31,6 +31,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -81,6 +82,7 @@ import net.focustation.myapplication.ui.theme.ColorVibration
 import net.focustation.myapplication.ui.theme.FocusInk
 import net.focustation.myapplication.ui.theme.FocustationTheme
 import net.focustation.myapplication.util.DebugLog
+import android.graphics.Color as AndroidColor
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -123,10 +125,18 @@ fun SpaceHistoryScreen(
         }
     }
 
+    val visibleRecords =
+        remember(uiState.spaceRecords, uiState.publicSpaceRecords, uiState.showPublicReports) {
+            if (uiState.showPublicReports) {
+                uiState.spaceRecords + uiState.publicSpaceRecords
+            } else {
+                uiState.spaceRecords
+            }
+        }
     val selectedRecord =
-        remember(uiState.selectedSpaceId, uiState.spaceRecords) {
+        remember(uiState.selectedSpaceId, visibleRecords) {
             uiState.selectedSpaceId?.let { selectedId ->
-                uiState.spaceRecords.find { it.id == selectedId }
+                visibleRecords.find { it.id == selectedId }
             }
         }
 
@@ -170,10 +180,11 @@ fun SpaceHistoryScreen(
                     .background(ReferenceDesignTokens.Screen),
         ) {
             NaverMapSection(
-                records = uiState.spaceRecords,
+                records = visibleRecords,
                 selectedId = uiState.selectedSpaceId,
                 hasLocationPermission = hasLocationPermission,
                 onPinClick = { viewModel.selectSpace(it) },
+                onVisibleBoundsChanged = viewModel::updateVisibleBounds,
                 modifier = Modifier.fillMaxSize(),
             )
 
@@ -185,6 +196,13 @@ fun SpaceHistoryScreen(
                 modifier = Modifier.align(Alignment.TopCenter),
             )
 
+            PublicReportsToggle(
+                checked = uiState.showPublicReports,
+                isLoading = uiState.isLoadingPublicReports,
+                onCheckedChange = viewModel::setShowPublicReports,
+                modifier = Modifier.align(Alignment.TopEnd),
+            )
+
             selectedRecord?.let {
                 SpaceDetailPopup(
                     record = it,
@@ -192,6 +210,42 @@ fun SpaceHistoryScreen(
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun PublicReportsToggle(
+    checked: Boolean,
+    isLoading: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    ElevatedCard(
+        modifier = modifier.padding(12.dp),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Column {
+                Text(
+                    text = "다른 사람의 결과도 보기",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = FocusInk,
+                )
+                if (isLoading) {
+                    Text(
+                        text = "불러오는 중",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Switch(checked = checked, onCheckedChange = onCheckedChange)
         }
     }
 }
@@ -266,12 +320,14 @@ private fun NaverMapSection(
     selectedId: String?,
     hasLocationPermission: Boolean,
     onPinClick: (String?) -> Unit,
+    onVisibleBoundsChanged: (Double, Double, Double, Double) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val activity = remember(context) { context.findActivity() }
     val onPinClickState by rememberUpdatedState(onPinClick)
+    val onVisibleBoundsChangedState by rememberUpdatedState(onVisibleBoundsChanged)
 
     val mapView =
         remember {
@@ -348,6 +404,10 @@ private fun NaverMapSection(
                 movedToInitialCamera = false
                 map.uiSettings.isLocationButtonEnabled = true
                 map.setOnMapClickListener { _, _ -> onPinClickState(null) }
+                map.contentBounds.notifyTo(onVisibleBoundsChangedState)
+                map.addOnCameraIdleListener {
+                    map.contentBounds.notifyTo(onVisibleBoundsChangedState)
+                }
                 DebugLog.d("Map initialized successfully")
                 mapInitErrorMessage = null
             } catch (e: Exception) {
@@ -373,13 +433,23 @@ private fun NaverMapSection(
 
         records.forEach { record ->
             val isSelected = record.id == selectedId
+            val isPublicRecord = record.id.startsWith(PUBLIC_RECORD_ID_PREFIX)
             val marker =
                 Marker().apply {
                     position = LatLng(record.latitude, record.longitude)
-                    icon =
-                        OverlayImage.fromBitmap(
-                            buildScoreMarkerBitmap(context, record.avgFocusScore, isSelected),
-                        )
+                    if (isPublicRecord) {
+                        iconTintColor =
+                            if (isSelected) {
+                                AndroidColor.rgb(72, 88, 255)
+                            } else {
+                                AndroidColor.rgb(78, 161, 255)
+                            }
+                    } else {
+                        icon =
+                            OverlayImage.fromBitmap(
+                                buildScoreMarkerBitmap(context, record.avgFocusScore, isSelected),
+                            )
+                    }
                     anchor = PointF(0.5f, 1f)
                     captionText = record.name
                     captionTextSize = 13f
@@ -542,6 +612,7 @@ private fun MetricText(
 
 private const val LOCATION_PERMISSION_REQUEST_CODE = 1001
 private const val NAVER_MAP_MCP_ID_META_KEY = "com.naver.maps.map.MCP_ID"
+private const val PUBLIC_RECORD_ID_PREFIX = "public:"
 
 private val LOCATION_PERMISSIONS =
     arrayOf(
@@ -571,6 +642,10 @@ private fun Context.hasNaverMapMcpIdConfigured(): Boolean =
                 .trim()
         clientId.isNotEmpty() && !clientId.startsWith("\${")
     }.getOrDefault(false)
+
+private fun LatLngBounds.notifyTo(onBoundsChanged: (Double, Double, Double, Double) -> Unit) {
+    onBoundsChanged(northLatitude, southLatitude, eastLongitude, westLongitude)
+}
 
 private fun SpaceRecord.toSessionSummary(): String = "세션 ${sessionCount}회 · 마지막 방문: $lastVisited"
 
