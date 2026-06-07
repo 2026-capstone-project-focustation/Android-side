@@ -477,13 +477,23 @@ private fun SensorTimelineCard(
 
 @Composable
 private fun EnvironmentAnalysisGrid(session: StudySessionRecord) {
+    val noiseStatus =
+        session.reportEnvironmentSummary?.noise.toNoiseStatusLabel()
+            ?: noiseStatus(session.avgNoise)
+    val lightStatus =
+        session.reportEnvironmentSummary?.light.toLightStatusLabel()
+            ?: lightStatus(session.avgIlluminance)
+    val vibrationStatus =
+        session.reportEnvironmentSummary?.vibration.toVibrationStatusLabel()
+            ?: vibrationStatus(session.avgVibration)
+
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             AnalysisMetricCard(
                 icon = Icons.Outlined.GraphicEq,
                 label = "평균 소음",
                 value = "${session.avgNoise.toInt()} dB",
-                status = noiseStatus(session.avgNoise),
+                status = noiseStatus,
                 tint = ColorNoise,
                 modifier = Modifier.weight(1f),
             )
@@ -491,7 +501,7 @@ private fun EnvironmentAnalysisGrid(session: StudySessionRecord) {
                 icon = Icons.Outlined.LightMode,
                 label = "평균 조도",
                 value = "${session.avgIlluminance.toInt()} lux",
-                status = lightStatus(session.avgIlluminance),
+                status = lightStatus,
                 tint = ColorLight,
                 modifier = Modifier.weight(1f),
             )
@@ -501,7 +511,7 @@ private fun EnvironmentAnalysisGrid(session: StudySessionRecord) {
                 icon = Icons.Outlined.Sensors,
                 label = "평균 진동",
                 value = String.format(Locale.getDefault(), "%.3f", session.avgVibration),
-                status = vibrationStatus(session.avgVibration),
+                status = vibrationStatus,
                 tint = ColorVibration,
                 modifier = Modifier.weight(1f),
             )
@@ -627,6 +637,31 @@ private fun vibrationStatus(vibration: Double): String =
         vibration <= 0.02 -> "안정"
         vibration <= 0.06 -> "보통"
         else -> "흔들림"
+    }
+
+private fun String?.toNoiseStatusLabel(): String? =
+    when (this) {
+        "low" -> "조용함"
+        "moderate" -> "보통"
+        "high" -> "소음 주의"
+        else -> null
+    }
+
+private fun String?.toLightStatusLabel(): String? =
+    when (this) {
+        "comfortable" -> "적정"
+        "too_dark" -> "어두움"
+        "too_bright" -> "밝음"
+        "unknown" -> "측정 없음"
+        else -> null
+    }
+
+private fun String?.toVibrationStatusLabel(): String? =
+    when (this) {
+        "low" -> "안정"
+        "moderate" -> "보통"
+        "high" -> "흔들림"
+        else -> null
     }
 
 // mlScore는 ML 새 계약 전까지 더미값 -1로 저장된다. 0 미만이면 아직 점수가 없는 것으로 본다.

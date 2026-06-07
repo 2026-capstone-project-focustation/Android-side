@@ -31,6 +31,13 @@ data class StudySessionRecord(
     val mlScore: Double? = null,
     val focusTimeline: List<FocusDataPoint> = emptyList(),
     val sensorTimelines: SensorTimelines = SensorTimelines(),
+    val reportEnvironmentSummary: ReportEnvironmentSummary? = null,
+)
+
+data class ReportEnvironmentSummary(
+    val noise: String? = null,
+    val light: String? = null,
+    val vibration: String? = null,
 )
 
 class FirestoreStudyRepository(
@@ -82,6 +89,7 @@ class FirestoreStudyRepository(
                                     lightRaw = doc.get("lightTimeline"),
                                     vibrationRaw = doc.get("vibrationTimeline"),
                                 ),
+                            reportEnvironmentSummary = parseReportEnvironmentSummary(doc.get("reportSummary")),
                         )
                     }
             DebugLog.d("[Firestore][목록조회][성공] uid=${uidForLog(uid)}, count=${records.size}")
@@ -129,6 +137,7 @@ class FirestoreStudyRepository(
                             lightRaw = document.get("lightTimeline"),
                             vibrationRaw = document.get("vibrationTimeline"),
                         ),
+                    reportEnvironmentSummary = parseReportEnvironmentSummary(document.get("reportSummary")),
                 )
             DebugLog.d(
                 "[Firestore][상세조회][성공] uid=${uidForLog(
@@ -197,6 +206,20 @@ class FirestoreStudyRepository(
                 timeLabel = timeLabel,
                 value = value.coerceAtLeast(0f),
             )
+        }
+    }
+
+    private fun parseReportEnvironmentSummary(raw: Any?): ReportEnvironmentSummary? {
+        val reportSummary = raw as? Map<*, *> ?: return null
+        val environmentSummary = reportSummary["environmentSummary"] as? Map<*, *> ?: return null
+        val summary =
+            ReportEnvironmentSummary(
+                noise = (environmentSummary["noise"] as? String)?.takeIf { it.isNotBlank() },
+                light = (environmentSummary["light"] as? String)?.takeIf { it.isNotBlank() },
+                vibration = (environmentSummary["vibration"] as? String)?.takeIf { it.isNotBlank() },
+            )
+        return summary.takeIf {
+            it.noise != null || it.light != null || it.vibration != null
         }
     }
 
