@@ -9,6 +9,7 @@ import android.content.ContextWrapper
 import android.content.pm.PackageManager
 import android.location.Geocoder
 import android.view.inputmethod.InputMethodManager
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -17,39 +18,38 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Place
+import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberBottomSheetScaffoldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -66,7 +66,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
@@ -107,7 +106,6 @@ import net.focustation.myapplication.data.repository.NaverPlaceSearchResult
 import net.focustation.myapplication.session.SelectedSessionPlace
 import net.focustation.myapplication.session.SessionPlaceSelectionStore
 import net.focustation.myapplication.ui.components.ReferenceDesignTokens
-import net.focustation.myapplication.ui.theme.FocusInk
 import net.focustation.myapplication.ui.theme.FocustationTheme
 import net.focustation.myapplication.util.DebugLog
 import java.util.Locale
@@ -116,11 +114,16 @@ import android.graphics.Color as AndroidColor
 data class PlaceSelectionUiState(
     val isLoadingLocation: Boolean = false,
     val isSearching: Boolean = false,
-    val query: String = "카페",
+    val query: String = "",
     val manualPlaceName: String = "",
     val addressHint: String = "",
     val latitude: Double? = null,
     val longitude: Double? = null,
+    val searchLatitude: Double? = null,
+    val searchLongitude: Double? = null,
+    val isMapSearchAreaSelected: Boolean = false,
+    val shouldShowResultsSheet: Boolean = false,
+    val resultQueryLabel: String = "",
     val results: List<NaverPlaceSearchResult> = emptyList(),
     val selectedPlace: NaverPlaceSearchResult? = null,
     val errorMessage: String? = null,
@@ -139,29 +142,71 @@ class PlaceSelectionViewModel(
     private var searchJob: Job? = null
 
     fun updateQuery(query: String) {
+        searchJob?.cancel()
+        val normalizedQuery = query.normalizeSearchQuery()
+        val limitedQuery = normalizedQuery.take(MAX_PLACE_SEARCH_QUERY_LENGTH)
+        val queryError =
+            if (normalizedQuery.length > MAX_PLACE_SEARCH_QUERY_LENGTH) {
+                "검색어는 ${MAX_PLACE_SEARCH_QUERY_LENGTH}자까지 입력할 수 있어요."
+            } else {
+                null
+            }
         _uiState.update {
             it.copy(
-                query = query,
+                query = limitedQuery,
                 manualPlaceName = "",
                 selectedPlace = null,
+                shouldShowResultsSheet = false,
+                results = emptyList(),
+                resultQueryLabel = "",
+                errorMessage = queryError,
             )
         }
-        scheduleSearch()
     }
 
     fun selectPlace(place: NaverPlaceSearchResult) {
-        _uiState.update { it.copy(selectedPlace = place, manualPlaceName = place.name) }
+        _uiState.update {
+            it.copy(
+                selectedPlace = place,
+                manualPlaceName = place.name,
+                shouldShowResultsSheet = false,
+            )
+        }
     }
 
     fun loadInitialPlaces() {
         if (initialLoadRequested) return
         initialLoadRequested = true
-        refreshPlaces()
+        refreshPlaces(searchAfterRefresh = false)
     }
 
-    fun refreshPlaces() {
+    fun useCurrentLocationSearch() {
+        refreshPlaces(searchAfterRefresh = _uiState.value.query.isNotBlank())
+    }
+
+    fun dismissResults() {
+        searchJob?.cancel()
+        _uiState.update {
+            it.copy(
+                isSearching = false,
+                isLoadingLocation = false,
+                shouldShowResultsSheet = false,
+                results = emptyList(),
+                resultQueryLabel = "",
+                errorMessage = null,
+            )
+        }
+    }
+
+    private fun refreshPlaces(searchAfterRefresh: Boolean) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoadingLocation = true, isSearching = true, errorMessage = null) }
+            _uiState.update {
+                it.copy(
+                    isLoadingLocation = true,
+                    isSearching = searchAfterRefresh,
+                    errorMessage = null,
+                )
+            }
             val location =
                 runCatching { currentLocation() }
                     .onFailure { initialLoadRequested = false }
@@ -174,44 +219,102 @@ class PlaceSelectionViewModel(
                     isLoadingLocation = false,
                     latitude = location?.latitude,
                     longitude = location?.longitude,
+                    searchLatitude = location?.latitude,
+                    searchLongitude = location?.longitude,
+                    isMapSearchAreaSelected = false,
                     addressHint = addressHint,
+                    shouldShowResultsSheet = searchAfterRefresh,
                 )
             }
 
-            searchCurrentQuery()
+            if (searchAfterRefresh) {
+                searchCurrentQuery(allowFallback = true)
+            }
         }
     }
 
-    fun searchCurrentQuery() {
-        searchJob?.cancel()
-        searchJob = viewModelScope.launch { performSearch() }
+    fun updateMapCenter(
+        latitude: Double,
+        longitude: Double,
+    ) {
+        _uiState.update {
+            it.copy(
+                searchLatitude = latitude,
+                searchLongitude = longitude,
+                isMapSearchAreaSelected = false,
+            )
+        }
     }
 
-    private fun scheduleSearch() {
+    fun searchCurrentQuery(allowFallback: Boolean = false) {
         searchJob?.cancel()
         searchJob =
             viewModelScope.launch {
-                delay(SEARCH_DEBOUNCE_MS)
-                performSearch()
+                val state = _uiState.value
+                val centerLatitude = state.searchLatitude ?: state.latitude
+                val centerLongitude = state.searchLongitude ?: state.longitude
+                val addressHint =
+                    if (centerLatitude != null && centerLongitude != null) {
+                        resolveAddressHint(getApplication(), centerLatitude, centerLongitude)
+                    } else {
+                        state.addressHint
+                    }
+                _uiState.update {
+                    it.copy(
+                        addressHint = addressHint,
+                        searchLatitude = centerLatitude,
+                        searchLongitude = centerLongitude,
+                        isMapSearchAreaSelected = false,
+                    )
+                }
+                performSearch(allowFallback = allowFallback)
             }
     }
 
-    private suspend fun performSearch() {
+    private suspend fun performSearch(allowFallback: Boolean = false) {
         val state = _uiState.value
-        val requestedQuery = state.query.trim()
+        val typedQuery = state.query.normalizeSearchQuery()
+        if (typedQuery.length > MAX_PLACE_SEARCH_QUERY_LENGTH) {
+            _uiState.update {
+                it.copy(
+                    isSearching = false,
+                    results = emptyList(),
+                    selectedPlace = null,
+                    shouldShowResultsSheet = true,
+                    resultQueryLabel = typedQuery.toDisplayQueryLabel(),
+                    errorMessage = "검색어는 ${MAX_PLACE_SEARCH_QUERY_LENGTH}자 이하로 입력해주세요.",
+                )
+            }
+            return
+        }
+        val fallbackQuery = MAP_AREA_QUERY.takeIf { allowFallback }.orEmpty()
+        val requestedQuery =
+            typedQuery.takeIf { it.isNotBlank() }
+                ?: fallbackQuery
+        val resultQueryLabel = requestedQuery.toDisplayQueryLabel()
         if (requestedQuery.isBlank()) {
             _uiState.update {
                 it.copy(
                     isSearching = false,
                     results = emptyList(),
                     selectedPlace = null,
+                    shouldShowResultsSheet = false,
+                    resultQueryLabel = "",
                     errorMessage = null,
                 )
             }
             return
         }
 
-        _uiState.update { it.copy(isSearching = true, errorMessage = null, selectedPlace = null) }
+        _uiState.update {
+            it.copy(
+                isSearching = true,
+                errorMessage = null,
+                selectedPlace = null,
+                shouldShowResultsSheet = true,
+                resultQueryLabel = resultQueryLabel,
+            )
+        }
         val result =
             placeSearchRepository.searchPlaces(
                 query = requestedQuery,
@@ -220,28 +323,22 @@ class PlaceSelectionViewModel(
         result.fold(
             onSuccess = { places ->
                 _uiState.update {
-                    if (it.query.trim() != requestedQuery) {
-                        it
-                    } else {
-                        it.copy(
-                            isSearching = false,
-                            results = places,
-                            errorMessage = null,
-                        )
-                    }
+                    it.copy(
+                        isSearching = false,
+                        results = places,
+                        resultQueryLabel = resultQueryLabel,
+                        errorMessage = null,
+                    )
                 }
             },
             onFailure = { error ->
                 _uiState.update {
-                    if (it.query.trim() != requestedQuery) {
-                        it
-                    } else {
-                        it.copy(
-                            isSearching = false,
-                            results = emptyList(),
-                            errorMessage = error.message ?: "장소 검색에 실패했어요.",
-                        )
-                    }
+                    it.copy(
+                        isSearching = false,
+                        results = emptyList(),
+                        resultQueryLabel = resultQueryLabel,
+                        errorMessage = error.message ?: "장소 검색에 실패했어요.",
+                    )
                 }
             },
         )
@@ -262,8 +359,8 @@ class PlaceSelectionViewModel(
         SessionPlaceSelectionStore.save(
             SelectedSessionPlace(
                 name = name,
-                latitude = selected?.latitude ?: state.latitude,
-                longitude = selected?.longitude ?: state.longitude,
+                latitude = selected?.latitude ?: state.searchLatitude ?: state.latitude,
+                longitude = selected?.longitude ?: state.searchLongitude ?: state.longitude,
                 address = selected?.roadAddress?.ifBlank { selected.address }.orEmpty(),
                 category = selected?.category.orEmpty(),
             ),
@@ -279,10 +376,6 @@ class PlaceSelectionViewModel(
                     .await()
             }.getOrNull()
         return current ?: runCatching { fusedLocationClient.lastLocation.await() }.getOrNull()
-    }
-
-    private companion object {
-        private const val SEARCH_DEBOUNCE_MS = 350L
     }
 }
 
@@ -327,18 +420,18 @@ fun PlaceSelectionScreen(
         }
     }
 
+    BackHandler(enabled = uiState.shouldShowResultsSheet) {
+        viewModel.dismissResults()
+    }
+
     PlaceSelectionContent(
         uiState = uiState,
         isNaverMapMcpIdConfigured = isNaverMapMcpIdConfigured,
         hasLocationPermission = hasLocationPermission,
-        onBack = onBack,
         onQueryChange = viewModel::updateQuery,
-        onSearch = viewModel::searchCurrentQuery,
-        onKeyword = {
-            viewModel.updateQuery(it)
-            viewModel.searchCurrentQuery()
-        },
+        onSearch = { viewModel.searchCurrentQuery() },
         onPlaceClick = viewModel::selectPlace,
+        onMapCenterChanged = viewModel::updateMapCenter,
         onSkip = {
             SessionPlaceSelectionStore.clear()
             onPlaceSelected()
@@ -351,20 +444,42 @@ fun PlaceSelectionScreen(
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 private fun PlaceSelectionContent(
     uiState: PlaceSelectionUiState,
     isNaverMapMcpIdConfigured: Boolean,
     hasLocationPermission: Boolean,
-    onBack: () -> Unit,
     onQueryChange: (String) -> Unit,
     onSearch: () -> Unit,
-    onKeyword: (String) -> Unit,
     onPlaceClick: (NaverPlaceSearchResult) -> Unit,
+    onMapCenterChanged: (Double, Double) -> Unit,
     onSkip: () -> Unit,
     onConfirm: () -> Unit,
-    autoFocusSearch: Boolean = true,
+    autoFocusSearch: Boolean = false,
 ) {
-    Scaffold(
+    val bottomSheetScaffoldState = rememberBottomSheetScaffoldState()
+    val hasResultSheet =
+        uiState.results.isNotEmpty() ||
+            uiState.isSearching ||
+            uiState.errorMessage != null ||
+            uiState.resultQueryLabel.isNotBlank()
+
+    BottomSheetScaffold(
+        scaffoldState = bottomSheetScaffoldState,
+        sheetPeekHeight = if (hasResultSheet) 124.dp else 0.dp,
+        sheetShape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp),
+        sheetContainerColor = ReferenceDesignTokens.WhiteCard,
+        sheetShadowElevation = 8.dp,
+        sheetContent = {
+            if (hasResultSheet) {
+                PlaceResultsContent(
+                    uiState = uiState,
+                    onPlaceClick = onPlaceClick,
+                )
+            } else {
+                Spacer(Modifier.height(0.dp))
+            }
+        },
         containerColor = ReferenceDesignTokens.Screen,
     ) { paddingValues ->
         Box(
@@ -382,75 +497,39 @@ private fun PlaceSelectionContent(
                 results = uiState.results,
                 selectedPlace = uiState.selectedPlace,
                 onPlaceClick = onPlaceClick,
+                onMapCenterChanged = onMapCenterChanged,
                 modifier = Modifier.fillMaxSize(),
             )
 
-            Column(
+            Box(
                 modifier =
                     Modifier
                         .align(Alignment.TopCenter)
                         .fillMaxWidth()
-                        .statusBarsPadding()
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                        .padding(top = 0.dp),
             ) {
-                PlaceSelectionHeader(onBack = onBack)
                 PlaceSearchOverlay(
                     uiState = uiState,
                     onQueryChange = onQueryChange,
                     onSearch = onSearch,
-                    onKeyword = onKeyword,
                     autoFocus = autoFocusSearch,
                 )
             }
 
-            PlaceResultsSheet(
-                uiState = uiState,
-                onPlaceClick = onPlaceClick,
-                onSkip = onSkip,
-                onConfirm = onConfirm,
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .imePadding()
-                        .padding(horizontal = 12.dp, vertical = 12.dp),
-            )
+            if (!hasResultSheet || uiState.selectedPlace != null) {
+                SelectedPlaceBar(
+                    selectedPlace = uiState.selectedPlace,
+                    onSkip = onSkip,
+                    onConfirm = onConfirm,
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .padding(horizontal = 12.dp, vertical = 12.dp),
+                )
+            }
         }
-    }
-}
-
-@Composable
-private fun PlaceSelectionHeader(onBack: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        IconButton(
-            onClick = onBack,
-            modifier =
-                Modifier
-                    .size(42.dp)
-                    .clip(CircleShape)
-                    .background(ReferenceDesignTokens.WhiteCard),
-        ) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로", tint = FocusInk)
-        }
-        Surface(
-            shape = RoundedCornerShape(18.dp),
-            color = ReferenceDesignTokens.WhiteCard,
-            shadowElevation = 0.dp,
-        ) {
-            Text(
-                text = "장소 지정",
-                modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
-                color = ReferenceDesignTokens.TextPrimary,
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
-            )
-        }
-        Spacer(Modifier.size(42.dp))
     }
 }
 
@@ -459,7 +538,6 @@ private fun PlaceSearchOverlay(
     uiState: PlaceSelectionUiState,
     onQueryChange: (String) -> Unit,
     onSearch: () -> Unit,
-    onKeyword: (String) -> Unit,
     autoFocus: Boolean = true,
 ) {
     val focusRequester = remember { FocusRequester() }
@@ -492,14 +570,16 @@ private fun PlaceSearchOverlay(
         modifier =
             Modifier
                 .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp)
                 .clickable { requestSearchFocus() },
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(18.dp),
         color = ReferenceDesignTokens.WhiteCard,
         border = BorderStroke(1.dp, ReferenceDesignTokens.Border),
         shadowElevation = 0.dp,
     ) {
         Column(
-            modifier = Modifier.padding(14.dp),
+            modifier =
+                Modifier.padding(10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             OutlinedTextField(
@@ -518,7 +598,7 @@ private fun PlaceSearchOverlay(
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                 label = { Text("장소 검색") },
                 placeholder = { Text("카페, 스터디카페, 도서관") },
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(14.dp),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions =
                     KeyboardActions(
@@ -531,24 +611,103 @@ private fun PlaceSearchOverlay(
             Text(
                 text =
                     if (uiState.addressHint.isBlank()) {
-                        "현재 위치 기준으로 검색합니다"
+                        "지도에서 고른 위치 기준으로 검색합니다"
+                    } else if (uiState.isMapSearchAreaSelected) {
+                        "${uiState.addressHint} 근처 지도 검색"
                     } else {
                         "${uiState.addressHint} 주변 검색"
                     },
                 color = ReferenceDesignTokens.TextSecondary,
                 style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.padding(horizontal = 14.dp),
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PLACE_KEYWORDS.forEach { keyword ->
-                    FilterChip(
-                        selected = uiState.query == keyword,
-                        onClick = { onKeyword(keyword) },
-                        label = { Text(keyword) },
-                        colors =
-                            FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = ReferenceDesignTokens.Dark,
-                                selectedLabelColor = Color.White,
-                            ),
+        }
+    }
+}
+
+@Composable
+private fun PlaceResultsContent(
+    uiState: PlaceSelectionUiState,
+    onPlaceClick: (NaverPlaceSearchResult) -> Unit,
+) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 72.dp, max = 560.dp)
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(
+                modifier =
+                    Modifier
+                        .width(46.dp)
+                        .height(5.dp)
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(ReferenceDesignTokens.Border),
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = "주변 장소",
+                    color = ReferenceDesignTokens.TextPrimary,
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = resultSummary(uiState),
+                    color = ReferenceDesignTokens.TextSecondary,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            uiState.selectedPlace?.let {
+                Text(
+                    text = "선택됨",
+                    color = ReferenceDesignTokens.BlueDark,
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+
+        uiState.errorMessage?.let { message ->
+            MessageCard(message = message)
+        }
+
+        if (uiState.isSearching || uiState.isLoadingLocation) {
+            MessageCard(message = "검색어에 맞는 장소를 찾는 중이에요.")
+        } else if (uiState.results.isEmpty()) {
+            MessageCard(message = "검색 결과가 없어요. 다른 장소명을 입력해보세요.")
+        } else {
+            LazyColumn(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(bottom = 18.dp),
+            ) {
+                itemsIndexed(
+                    items = uiState.results,
+                    key = { index, place -> place.stableLazyKey(index) },
+                ) { _, place ->
+                    PlaceResultCard(
+                        place = place,
+                        selected = uiState.selectedPlace == place,
+                        onClick = { onPlaceClick(place) },
                     )
                 }
             }
@@ -557,78 +716,63 @@ private fun PlaceSearchOverlay(
 }
 
 @Composable
-private fun PlaceResultsSheet(
-    uiState: PlaceSelectionUiState,
-    onPlaceClick: (NaverPlaceSearchResult) -> Unit,
+private fun SelectedPlaceBar(
+    selectedPlace: NaverPlaceSearchResult?,
     onSkip: () -> Unit,
     onConfirm: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(22.dp),
         color = ReferenceDesignTokens.WhiteCard,
         border = BorderStroke(1.dp, ReferenceDesignTokens.Border),
         shadowElevation = 0.dp,
     ) {
         Column(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(
-                        text = "검색 결과",
-                        color = ReferenceDesignTokens.TextPrimary,
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
-                    )
-                    Text(
-                        text = resultSummary(uiState),
-                        color = ReferenceDesignTokens.TextSecondary,
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                }
-                uiState.selectedPlace?.let {
-                    Text(
-                        text = "선택됨",
-                        color = ReferenceDesignTokens.BlueDark,
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                    )
-                }
-            }
-
-            uiState.errorMessage?.let { message ->
-                MessageCard(message = message)
-            }
-
-            if (uiState.isSearching || uiState.isLoadingLocation) {
-                MessageCard(message = "검색어에 맞는 장소를 찾는 중이에요.")
-            } else if (uiState.results.isEmpty()) {
-                MessageCard(message = "검색 결과가 없어요. 다른 장소명을 입력해보세요.")
-            } else {
-                LazyColumn(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 280.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+            if (selectedPlace != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    items(uiState.results, key = { "${it.name}-${it.roadAddress}-${it.address}" }) { place ->
-                        PlaceResultCard(
-                            place = place,
-                            selected = uiState.selectedPlace == place,
-                            onClick = { onPlaceClick(place) },
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(ReferenceDesignTokens.PaleBlueTrack),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(Icons.Outlined.Place, contentDescription = null, tint = ReferenceDesignTokens.BlueDark)
+                    }
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            text = selectedPlace.name,
+                            color = ReferenceDesignTokens.TextPrimary,
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text =
+                                selectedPlace.roadAddress
+                                    .ifBlank { selectedPlace.address }
+                                    .ifBlank { selectedPlace.category },
+                            color = ReferenceDesignTokens.TextSecondary,
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
             }
 
             PlaceActionButtons(
-                canSelect = uiState.selectedPlace != null,
+                canSelect = selectedPlace != null,
                 onSkip = onSkip,
                 onConfirm = onConfirm,
             )
@@ -645,6 +789,7 @@ private fun PlacePickerMap(
     results: List<NaverPlaceSearchResult>,
     selectedPlace: NaverPlaceSearchResult?,
     onPlaceClick: (NaverPlaceSearchResult) -> Unit,
+    onMapCenterChanged: (Double, Double) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (!isNaverMapMcpIdConfigured) {
@@ -661,6 +806,7 @@ private fun PlacePickerMap(
     val lifecycleOwner = LocalLifecycleOwner.current
     val activity = remember(context) { context.findActivity() }
     val onPlaceClickState by rememberUpdatedState(onPlaceClick)
+    val onMapCenterChangedState by rememberUpdatedState(onMapCenterChanged)
     val latestResults by rememberUpdatedState(results)
     val latestSelectedPlace by rememberUpdatedState(selectedPlace)
     val mapView =
@@ -723,6 +869,12 @@ private fun PlacePickerMap(
             naverMap = map
             runCatching {
                 map.uiSettings.isLocationButtonEnabled = true
+                val initialTarget = map.cameraPosition.target
+                onMapCenterChangedState(initialTarget.latitude, initialTarget.longitude)
+                map.addOnCameraIdleListener {
+                    val target = map.cameraPosition.target
+                    onMapCenterChangedState(target.latitude, target.longitude)
+                }
                 map.locationTrackingMode =
                     if (hasLocationPermission) {
                         LocationTrackingMode.Follow
@@ -776,11 +928,10 @@ private fun PlacePickerMap(
         }
     }
 
-    LaunchedEffect(naverMap, currentLatitude, currentLongitude, results) {
+    LaunchedEffect(naverMap, currentLatitude, currentLongitude) {
         val map = naverMap ?: return@LaunchedEffect
         val target =
-            latestResults.firstNotNullOfOrNull { it.toLatLngOrNull() }
-                ?: currentLatLngOrNull(currentLatitude, currentLongitude)
+            currentLatLngOrNull(currentLatitude, currentLongitude)
                 ?: return@LaunchedEffect
         map.moveCamera(
             CameraUpdate
@@ -880,6 +1031,8 @@ private fun MessageCard(message: String) {
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
             color = ReferenceDesignTokens.TextPrimary,
             style = MaterialTheme.typography.bodySmall,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -916,9 +1069,9 @@ private fun PlaceActionButtons(
 private fun resultSummary(uiState: PlaceSelectionUiState): String =
     when {
         uiState.isLoadingLocation -> "현재 위치 확인 중"
-        uiState.isSearching -> "\"${uiState.query}\" 검색 중"
-        uiState.results.isEmpty() -> "\"${uiState.query}\" 결과 없음"
-        else -> "\"${uiState.query}\" ${uiState.results.size}개"
+        uiState.isSearching -> "${uiState.resultQueryLabel.ifBlank { "주변 장소" }} 검색 중"
+        uiState.results.isEmpty() -> "${uiState.resultQueryLabel.ifBlank { "주변 장소" }} 결과 없음"
+        else -> "${uiState.resultQueryLabel.ifBlank { "주변 장소" }} ${uiState.results.size}개"
     }
 
 private fun currentLatLngOrNull(
@@ -935,6 +1088,16 @@ private fun NaverPlaceSearchResult.toLatLngOrNull(): LatLng? {
     return LatLng(latitude, longitude).takeIf { it.isValid() }
 }
 
+private fun NaverPlaceSearchResult.stableLazyKey(index: Int): String =
+    listOf(
+        index,
+        name,
+        roadAddress,
+        address,
+        latitude,
+        longitude,
+    ).joinToString("|")
+
 private const val LOCATION_PERMISSION_REQUEST_CODE = 1001
 private const val NAVER_MAP_MCP_ID_META_KEY = "com.naver.maps.map.MCP_ID"
 private const val KEYBOARD_SHOW_DELAY_MS = 250L
@@ -942,8 +1105,9 @@ private const val KEYBOARD_RETRY_DELAY_MS = 180L
 private const val KEYBOARD_SHOW_ATTEMPTS = 3
 private const val DEFAULT_MAP_ZOOM = 15.0
 private const val SELECTED_MAP_ZOOM = 16.5
-
-private val PLACE_KEYWORDS = listOf("카페", "스터디카페", "도서관")
+private const val MAP_AREA_QUERY = "가게"
+private const val MAX_PLACE_SEARCH_QUERY_LENGTH = 80
+private const val DISPLAY_QUERY_LABEL_LENGTH = 30
 
 private val LOCATION_PERMISSIONS =
     arrayOf(
@@ -973,6 +1137,15 @@ private fun Context.hasNaverMapMcpIdConfigured(): Boolean =
                 .trim()
         clientId.isNotEmpty() && !clientId.startsWith("\${")
     }.getOrDefault(false)
+
+private fun String.normalizeSearchQuery(): String = trim().replace(Regex("\\s+"), " ")
+
+private fun String.toDisplayQueryLabel(): String =
+    if (length <= DISPLAY_QUERY_LABEL_LENGTH) {
+        this
+    } else {
+        "${take(DISPLAY_QUERY_LABEL_LENGTH)}..."
+    }
 
 @androidx.compose.ui.tooling.preview.Preview(showBackground = true)
 @Composable
@@ -1004,16 +1177,18 @@ private fun PlaceSelectionPreview() {
                     addressHint = "서울 마포구",
                     latitude = 37.5622,
                     longitude = 126.9254,
+                    searchLatitude = 37.5622,
+                    searchLongitude = 126.9254,
+                    resultQueryLabel = "스터디카페",
                     results = samplePlaces,
                     selectedPlace = samplePlaces.first(),
                 ),
             isNaverMapMcpIdConfigured = false,
             hasLocationPermission = true,
-            onBack = {},
             onQueryChange = {},
             onSearch = {},
-            onKeyword = {},
             onPlaceClick = {},
+            onMapCenterChanged = { _, _ -> },
             onSkip = {},
             onConfirm = {},
             autoFocusSearch = false,
