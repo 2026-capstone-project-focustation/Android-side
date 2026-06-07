@@ -3,6 +3,9 @@ package net.focustation.myapplication.navigation
 sealed class NavRoute(
     val route: String,
 ) {
+    // Splash
+    data object Splash : NavRoute("splash")
+
     // Auth
     data object Login : NavRoute("login")
 

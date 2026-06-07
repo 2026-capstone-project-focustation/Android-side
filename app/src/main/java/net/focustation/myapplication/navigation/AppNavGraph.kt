@@ -24,6 +24,7 @@ import net.focustation.myapplication.ui.screen.session.PlaceSelectionScreen
 import net.focustation.myapplication.ui.screen.session.StartSessionPlaceSheet
 import net.focustation.myapplication.ui.screen.settings.SettingsScreen
 import net.focustation.myapplication.ui.screen.space.SpaceHistoryScreen
+import net.focustation.myapplication.ui.screen.splash.SplashScreen
 import net.focustation.myapplication.ui.screen.survey.SurveyScreen
 
 @Composable
@@ -34,13 +35,25 @@ fun AppNavGraph(navController: NavHostController) {
 
     NavHost(
         navController = navController,
-        startDestination =
-            if (onboardingStore.isCompleted()) {
-                NavRoute.Dashboard.route
-            } else {
-                NavRoute.Onboarding.route
-            },
+        startDestination = NavRoute.Splash.route,
     ) {
+        composable(NavRoute.Splash.route) {
+            SplashScreen(
+                onTimeout = {
+                    val nextRoute =
+                        if (onboardingStore.isCompleted()) {
+                            NavRoute.Dashboard.route
+                        } else {
+                            NavRoute.Onboarding.route
+                        }
+                    navController.navigate(nextRoute) {
+                        popUpTo(NavRoute.Splash.route) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+            )
+        }
+
         composable(NavRoute.Login.route) {
             LoginScreen(
                 onLoginSuccess = {
