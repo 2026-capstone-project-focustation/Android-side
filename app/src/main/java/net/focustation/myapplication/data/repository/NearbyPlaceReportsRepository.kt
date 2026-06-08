@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import net.focustation.myapplication.BuildConfig
+import net.focustation.myapplication.data.model.EnvironmentTag
 import net.focustation.myapplication.util.DebugLog
 import org.json.JSONObject
 import java.io.IOException
@@ -26,6 +27,7 @@ data class PublicPlaceReportRecord(
     val avgIlluminance: Double,
     val avgVibration: Double,
     val lastReportedAt: String?,
+    val environmentTags: List<EnvironmentTag> = emptyList(),
 )
 
 class NearbyPlaceReportsRepository(
@@ -170,6 +172,24 @@ class NearbyPlaceReportsRepository(
                 avgIlluminance = item.optDouble("avgIlluminance", 0.0),
                 avgVibration = item.optDouble("avgVibration", 0.0),
                 lastReportedAt = item.optString("lastReportedAt").ifBlank { null },
+                environmentTags = parseEnvironmentTags(item),
+            )
+        }
+    }
+
+    private fun parseEnvironmentTags(item: JSONObject): List<EnvironmentTag> {
+        val tags = item.optJSONArray("environmentTags") ?: return emptyList()
+        return (0 until tags.length()).mapNotNull { index ->
+            val tag = tags.optJSONObject(index) ?: return@mapNotNull null
+            val key = tag.optString("key").trim()
+            val label = tag.optString("label").trim()
+            val category = tag.optString("category").trim()
+            if (key.isBlank() || label.isBlank() || category.isBlank()) return@mapNotNull null
+            EnvironmentTag(
+                key = key,
+                label = label,
+                category = category,
+                tone = tag.optString("tone").ifBlank { "neutral" },
             )
         }
     }

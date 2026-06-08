@@ -32,6 +32,7 @@ data class SpaceRecord(
     val avgIlluminance: Float,
     val avgVibration: Double,
     val lastVisited: String,
+    val environmentTags: List<EnvironmentTag> = emptyList(),
 )
 
 data class FocusDataPoint(
