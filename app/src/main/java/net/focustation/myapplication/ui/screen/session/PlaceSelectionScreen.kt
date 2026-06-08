@@ -575,7 +575,7 @@ private fun PlaceSearchOverlay(
         shape = RoundedCornerShape(18.dp),
         color = ReferenceDesignTokens.WhiteCard,
         border = BorderStroke(1.dp, ReferenceDesignTokens.Border),
-        shadowElevation = 4.dp,
+        shadowElevation = 0.dp,
     ) {
         Column(
             modifier =
@@ -727,7 +727,7 @@ private fun SelectedPlaceBar(
         shape = RoundedCornerShape(22.dp),
         color = ReferenceDesignTokens.WhiteCard,
         border = BorderStroke(1.dp, ReferenceDesignTokens.Border),
-        shadowElevation = 8.dp,
+        shadowElevation = 0.dp,
     ) {
         Column(
             modifier = Modifier.padding(12.dp),

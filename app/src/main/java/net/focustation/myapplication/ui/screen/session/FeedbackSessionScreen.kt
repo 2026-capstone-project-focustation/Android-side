@@ -169,7 +169,7 @@ private fun FeedbackSubmitBar(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = ReferenceDesignTokens.Screen,
-        shadowElevation = 8.dp,
+        shadowElevation = 0.dp,
     ) {
         Column(
             modifier =
@@ -239,7 +239,7 @@ private fun QuestionBlock(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
         color = ReferenceDesignTokens.WhiteCard,
-        shadowElevation = 4.dp,
+        shadowElevation = 0.dp,
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),

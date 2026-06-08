@@ -3,6 +3,7 @@ package net.focustation.myapplication.ui.screen.session
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -81,21 +82,31 @@ class EnvironmentSessionViewModel(
 
     init {
         viewModelScope.launch {
-            lightManager.getLightFlow().collect { lux ->
-                if (!_uiState.value.isRunning) return@collect
-                lightBuf.addLast(lux)
-                if (lightBuf.size > WINDOW) lightBuf.removeFirst()
-                lightSamples += lux
-                recalculate()
+            runCatching {
+                lightManager.getLightFlow().collect { lux ->
+                    if (!_uiState.value.isRunning) return@collect
+                    lightBuf.addLast(lux)
+                    if (lightBuf.size > WINDOW) lightBuf.removeFirst()
+                    lightSamples += lux
+                    recalculate()
+                }
+            }.onFailure { error ->
+                if (error is CancellationException) throw error
+                DebugLog.e("[집중세션][조도측정] 실패: ${error.message}", error)
             }
         }
         viewModelScope.launch {
-            vibrationManager.getVibrationFlow().collect { m ->
-                if (!_uiState.value.isRunning) return@collect
-                vibBuf.addLast(m)
-                if (vibBuf.size > WINDOW) vibBuf.removeFirst()
-                vibrationSamples += m
-                recalculate()
+            runCatching {
+                vibrationManager.getVibrationFlow().collect { m ->
+                    if (!_uiState.value.isRunning) return@collect
+                    vibBuf.addLast(m)
+                    if (vibBuf.size > WINDOW) vibBuf.removeFirst()
+                    vibrationSamples += m
+                    recalculate()
+                }
+            }.onFailure { error ->
+                if (error is CancellationException) throw error
+                DebugLog.e("[집중세션][진동측정] 실패: ${error.message}", error)
             }
         }
     }
@@ -395,25 +406,35 @@ class FocusSessionViewModel(
 
     init {
         viewModelScope.launch {
-            lightManager.getLightFlow().collect { lux ->
-                if (!_uiState.value.isRunning) return@collect
-                lightBuf.addLast(lux)
-                if (lightBuf.size > WINDOW) lightBuf.removeFirst()
-                lightSum += lux
-                lightCount += 1
-                lightSamples += lux
-                updateSensorSnapshot()
+            runCatching {
+                lightManager.getLightFlow().collect { lux ->
+                    if (!_uiState.value.isRunning) return@collect
+                    lightBuf.addLast(lux)
+                    if (lightBuf.size > WINDOW) lightBuf.removeFirst()
+                    lightSum += lux
+                    lightCount += 1
+                    lightSamples += lux
+                    updateSensorSnapshot()
+                }
+            }.onFailure { error ->
+                if (error is CancellationException) throw error
+                DebugLog.e("[집중세션][조도측정] 실패: ${error.message}", error)
             }
         }
         viewModelScope.launch {
-            vibrationManager.getVibrationFlow().collect { m ->
-                if (!_uiState.value.isRunning) return@collect
-                vibBuf.addLast(m)
-                if (vibBuf.size > WINDOW) vibBuf.removeFirst()
-                vibrationSum += m
-                vibrationCount += 1
-                vibrationSamples += m
-                updateSensorSnapshot()
+            runCatching {
+                vibrationManager.getVibrationFlow().collect { m ->
+                    if (!_uiState.value.isRunning) return@collect
+                    vibBuf.addLast(m)
+                    if (vibBuf.size > WINDOW) vibBuf.removeFirst()
+                    vibrationSum += m
+                    vibrationCount += 1
+                    vibrationSamples += m
+                    updateSensorSnapshot()
+                }
+            }.onFailure { error ->
+                if (error is CancellationException) throw error
+                DebugLog.e("[집중세션][진동측정] 실패: ${error.message}", error)
             }
         }
     }

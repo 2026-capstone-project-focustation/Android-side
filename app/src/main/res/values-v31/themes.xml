@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Focustation" parent="Theme.AppCompat.Light.NoActionBar">
+        <!-- 콜드스타트 시스템 스플래시의 원형 아이콘을 숨기고(투명), 흰 배경만 노출.
+             실제 시작 화면은 앱 내 SplashScreen에서 라운드 사각형 원본 이미지로 그린다. -->
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_splash_none</item>
+        <item name="android:windowSplashScreenBackground">@android:color/white</item>
+    </style>
+</resources>

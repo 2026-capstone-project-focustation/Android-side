@@ -1,6 +1,8 @@
 package net.focustation.myapplication.ui.screen.survey
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -49,15 +52,26 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.airbnb.lottie.RenderMode
+import com.airbnb.lottie.compose.LottieAnimation
+import com.airbnb.lottie.compose.LottieCompositionSpec
+import com.airbnb.lottie.compose.LottieConstants
+import com.airbnb.lottie.compose.animateLottieCompositionAsState
+import com.airbnb.lottie.compose.rememberLottieComposition
 import kotlinx.coroutines.launch
+import net.focustation.myapplication.R
 import net.focustation.myapplication.survey.SurveyPreferences
 import net.focustation.myapplication.ui.components.ReferenceDesignTokens
 import net.focustation.myapplication.ui.theme.FocustationTheme
@@ -161,6 +175,7 @@ fun SurveyScreen(
                     modifier =
                         Modifier
                             .fillMaxSize()
+                            .padding(top = 18.dp)
                             .graphicsLayer {
                                 alpha = 1f - pageOffset * 0.18f
                                 val scale = 0.97f + (1f - pageOffset) * 0.03f
@@ -169,10 +184,27 @@ fun SurveyScreen(
                             },
                     contentAlignment = Alignment.TopCenter,
                 ) {
-                    QuestionCard(page = page) {
+                    QuestionCard(
+                        page = page,
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
                         page.content(uiState, ::goNext)
                     }
                 }
+            }
+
+            // 포키/꼬리는 페이지마다 두면 스와이프 중 Lottie가 여러 개 동시 렌더돼 렉이 생긴다.
+            // 페이저 밖 고정 위치에 단일 인스턴스로 두어 모든 질문 페이지가 공유한다.
+            Column(
+                modifier =
+                    Modifier
+                        .align(Alignment.End)
+                        .padding(end = 40.dp, bottom = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                SpeechBubbleTail()
+                Spacer(Modifier.height(2.dp))
+                PokeyAsker(playing = !pagerState.isScrollInProgress)
             }
         }
     }
@@ -431,21 +463,21 @@ private fun MutableList<SurveyPage>.addLikertPage(
 @Composable
 private fun QuestionCard(
     page: SurveyPage,
+    modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
     Surface(
         modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(top = 18.dp, bottom = 16.dp)
+            modifier
                 .shadow(
-                    elevation = 14.dp,
+                    elevation = 0.dp,
                     shape = RoundedCornerShape(26.dp),
                     ambientColor = Color(0xFF91A5BC).copy(alpha = 0.10f),
                     spotColor = Color(0xFF91A5BC).copy(alpha = 0.16f),
                 ),
         shape = RoundedCornerShape(26.dp),
         color = ReferenceDesignTokens.WhiteCard,
+        border = BorderStroke(3.dp, SurveyBubbleBorderColor),
     ) {
         Column(
             modifier =
@@ -510,7 +542,7 @@ private fun SurveyBottomBar(
 ) {
     Surface(
         color = ReferenceDesignTokens.WhiteCard,
-        shadowElevation = 10.dp,
+        shadowElevation = 0.dp,
     ) {
         Row(
             modifier =
@@ -595,6 +627,65 @@ private fun LikertQuestion.displayTitle(): String =
         "pref_deepwork" -> "혼자 깊게 집중할 수 있는 공간을 선호해요"
         else -> title
     }
+
+private val SurveyBubbleBorderColor = Color(0xFFCBD3DC)
+
+@Composable
+private fun SpeechBubbleTail() {
+    Canvas(
+        modifier =
+            Modifier
+                .offset(y = (-4).dp)
+                .size(width = 30.dp, height = 46.dp),
+    ) {
+        val w = size.width
+        val h = size.height
+        val border = 3.dp.toPx()
+        val fill =
+            Path().apply {
+                moveTo(0f, 0f)
+                lineTo(w, 0f)
+                lineTo(w / 2f, h)
+                close()
+            }
+        drawPath(path = fill, color = ReferenceDesignTokens.WhiteCard)
+        drawLine(
+            color = SurveyBubbleBorderColor,
+            start = Offset(0f, 0f),
+            end = Offset(w / 2f, h),
+            strokeWidth = border,
+            cap = StrokeCap.Round,
+        )
+        drawLine(
+            color = SurveyBubbleBorderColor,
+            start = Offset(w, 0f),
+            end = Offset(w / 2f, h),
+            strokeWidth = border,
+            cap = StrokeCap.Round,
+        )
+    }
+}
+
+@Composable
+private fun PokeyAsker(playing: Boolean) {
+    // 모양(유령) 유지. 렉은 단일 인스턴스(페이저 밖) + GPU 렌더(HARDWARE) +
+    // 스와이프(스크롤) 중 애니메이션 일시정지(활성 페이지에서만 재생)로 잡는다.
+    val composition by rememberLottieComposition(
+        LottieCompositionSpec.RawRes(R.raw.poki_xeyes_float_lottie),
+    )
+    val progress by animateLottieCompositionAsState(
+        composition = composition,
+        iterations = LottieConstants.IterateForever,
+        isPlaying = playing,
+    )
+    LottieAnimation(
+        composition = composition,
+        progress = { progress },
+        modifier = Modifier.size(150.dp),
+        contentScale = ContentScale.Fit,
+        renderMode = RenderMode.SOFTWARE,
+    )
+}
 
 private const val LIKERT_LOW_LABEL = "낮음"
 
