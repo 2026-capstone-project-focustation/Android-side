@@ -18,13 +18,13 @@ import net.focustation.myapplication.R
  * 공간기록 지도 마커: 통통한 풍선 핀을 점수색으로 채우되 반투명·그라데이션으로 유리(glassy) 느낌을 준다.
  * 머리에 큰(살짝 비치는) 흰 원 + 점수, 끝(아래 꼭짓점)이 좌표를 가리킨다.
  * 장소명은 마커 캡션(이름표)으로 핀 아래에 따로 표시한다.
- * 색은 점수가 높을수록 빨강 / 중간 노랑 / 낮을수록 초록(히트맵 방향).
+ * 색은 점수가 높을수록 초록 / 중간 노랑 / 낮을수록 빨강(높을수록 좋음).
  */
 private fun scoreColor(score: Int): Int =
     when {
-        score >= 67 -> Color.parseColor("#FF5A5A") // 높음 (밝은 코랄레드)
+        score >= 67 -> Color.parseColor("#2FE0A6") // 높음 (밝은 민트그린)
         score >= 34 -> Color.parseColor("#FFD23F") // 중간 (밝은 옐로우)
-        else -> Color.parseColor("#2FE0A6") // 낮음 (밝은 민트)
+        else -> Color.parseColor("#FF5A5A") // 낮음 (밝은 코랄레드)
     }
 
 fun buildScoreMarkerBitmap(
