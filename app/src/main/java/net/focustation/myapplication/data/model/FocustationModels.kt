@@ -49,3 +49,10 @@ data class SensorTimelines(
     val light: List<SensorTimelinePoint> = emptyList(),
     val vibration: List<SensorTimelinePoint> = emptyList(),
 )
+
+data class EnvironmentTag(
+    val key: String,
+    val label: String,
+    val category: String,
+    val tone: String = "neutral",
+)
