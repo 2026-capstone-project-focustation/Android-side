@@ -32,12 +32,37 @@ data class StudySessionRecord(
     val focusTimeline: List<FocusDataPoint> = emptyList(),
     val sensorTimelines: SensorTimelines = SensorTimelines(),
     val reportEnvironmentSummary: ReportEnvironmentSummary? = null,
+    val sensorSummary: SessionSensorSummary? = null,
+    val placeFeedback: SessionPlaceFeedback? = null,
+    val hasAvgNoise: Boolean = true,
+    val hasAvgIlluminance: Boolean = true,
+    val hasAvgVibration: Boolean = true,
 )
 
 data class ReportEnvironmentSummary(
     val noise: String? = null,
     val light: String? = null,
     val vibration: String? = null,
+)
+
+data class SessionSensorSummary(
+    val noiseMeanDb: Double? = null,
+    val noiseMaxDb: Double? = null,
+    val lightMeanLux: Double? = null,
+    val lightStdLux: Double? = null,
+    val vibrationMean: Double? = null,
+    val vibrationMax: Double? = null,
+    val sampleCount: Int? = null,
+    val durationSec: Int? = null,
+    val reliability: String? = null,
+)
+
+data class SessionPlaceFeedback(
+    val outletSatisfied: Boolean? = null,
+    val seatAvailable: Boolean? = null,
+    val workSuitable: Boolean? = null,
+    val comfortable: Boolean? = null,
+    val highMovement: Boolean? = null,
 )
 
 class FirestoreStudyRepository(
@@ -90,6 +115,11 @@ class FirestoreStudyRepository(
                                     vibrationRaw = doc.get("vibrationTimeline"),
                                 ),
                             reportEnvironmentSummary = parseReportEnvironmentSummary(doc.get("reportSummary")),
+                            sensorSummary = parseSensorSummary(doc.get("sensorSummary")),
+                            placeFeedback = parsePlaceFeedback(doc.get("placeFeedback")),
+                            hasAvgNoise = doc.contains("avgNoise"),
+                            hasAvgIlluminance = doc.contains("avgIlluminance"),
+                            hasAvgVibration = doc.contains("avgVibration"),
                         )
                     }
             DebugLog.d("[Firestore][목록조회][성공] uid=${uidForLog(uid)}, count=${records.size}")
@@ -138,6 +168,11 @@ class FirestoreStudyRepository(
                             vibrationRaw = document.get("vibrationTimeline"),
                         ),
                     reportEnvironmentSummary = parseReportEnvironmentSummary(document.get("reportSummary")),
+                    sensorSummary = parseSensorSummary(document.get("sensorSummary")),
+                    placeFeedback = parsePlaceFeedback(document.get("placeFeedback")),
+                    hasAvgNoise = document.contains("avgNoise"),
+                    hasAvgIlluminance = document.contains("avgIlluminance"),
+                    hasAvgVibration = document.contains("avgVibration"),
                 )
             DebugLog.d(
                 "[Firestore][상세조회][성공] uid=${uidForLog(
@@ -222,6 +257,84 @@ class FirestoreStudyRepository(
             it.noise != null || it.light != null || it.vibration != null
         }
     }
+
+    private fun parseSensorSummary(raw: Any?): SessionSensorSummary? {
+        val map = raw as? Map<*, *> ?: return null
+        val summary =
+            SessionSensorSummary(
+                noiseMeanDb = map.doubleValue("noiseMeanDb", "avgNoise", "noiseAvgDb", "meanNoiseDb"),
+                noiseMaxDb = map.doubleValue("noiseMaxDb", "maxNoise", "noisePeakDb", "peakNoiseDb"),
+                lightMeanLux = map.doubleValue("lightMeanLux", "avgIlluminance", "illuminanceMeanLux", "meanLightLux"),
+                lightStdLux = map.doubleValue("lightStdLux", "illuminanceStdLux", "lightStdDevLux", "lightChangeLux"),
+                vibrationMean = map.doubleValue("vibrationMean", "avgVibration", "meanVibration"),
+                vibrationMax = map.doubleValue("vibrationMax", "maxVibration", "vibrationPeak"),
+                sampleCount = map.intValue("sampleCount", "samples", "readingCount", "totalCount"),
+                durationSec = map.intValue("durationSec", "measuredDurationSec", "measurementDurationSec"),
+                reliability = map.stringValue("reliability", "dataReliability", "confidence"),
+            )
+        return summary.takeIf {
+            it.noiseMeanDb != null ||
+                it.noiseMaxDb != null ||
+                it.lightMeanLux != null ||
+                it.lightStdLux != null ||
+                it.vibrationMean != null ||
+                it.vibrationMax != null ||
+                it.sampleCount != null ||
+                it.durationSec != null ||
+                it.reliability != null
+        }
+    }
+
+    private fun parsePlaceFeedback(raw: Any?): SessionPlaceFeedback? {
+        val map = raw as? Map<*, *> ?: return null
+        val feedback =
+            SessionPlaceFeedback(
+                outletSatisfied = map.positiveValue("outlet", "outletSatisfaction", "outletSatisfied", "powerOutlet"),
+                seatAvailable = map.positiveValue("seat", "seatAvailability", "seatAvailable", "spaciousSeat"),
+                workSuitable = map.positiveValue("workFit", "workSuitable", "studyFit", "productive"),
+                comfortable = map.positiveValue("comfort", "comfortable", "pleasant", "cozy"),
+                highMovement = map.positiveValue("movement", "movementLevel", "traffic", "crowdMovement"),
+            )
+        return feedback.takeIf {
+            it.outletSatisfied != null ||
+                it.seatAvailable != null ||
+                it.workSuitable != null ||
+                it.comfortable != null ||
+                it.highMovement != null
+        }
+    }
+
+    private fun Map<*, *>.doubleValue(vararg keys: String): Double? =
+        keys.firstNotNullOfOrNull { key ->
+            (this[key] as? Number)?.toDouble()?.takeIf { it.isFinite() }
+        }
+
+    private fun Map<*, *>.intValue(vararg keys: String): Int? =
+        keys.firstNotNullOfOrNull { key ->
+            (this[key] as? Number)?.toInt()
+        }
+
+    private fun Map<*, *>.stringValue(vararg keys: String): String? =
+        keys.firstNotNullOfOrNull { key ->
+            (this[key] as? String)?.trim()?.takeIf { it.isNotBlank() }
+        }
+
+    private fun Map<*, *>.positiveValue(vararg keys: String): Boolean? =
+        keys.firstNotNullOfOrNull { key ->
+            when (val value = this[key]) {
+                is Boolean -> value
+                is Number -> value.toDouble() >= 4.0
+                is String -> value.toPositiveBoolean()
+                else -> null
+            }
+        }
+
+    private fun String.toPositiveBoolean(): Boolean? =
+        when (trim().lowercase()) {
+            "true", "yes", "y", "good", "high", "satisfied", "available", "suitable", "comfortable" -> true
+            "false", "no", "n", "bad", "low", "unsatisfied", "unavailable", "unsuitable", "uncomfortable" -> false
+            else -> null
+        }
 
     private fun SensorTimelines.totalCount(): Int = noise.size + light.size + vibration.size
 

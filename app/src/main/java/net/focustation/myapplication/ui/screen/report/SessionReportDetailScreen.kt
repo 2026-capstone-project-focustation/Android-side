@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -50,6 +52,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import net.focustation.myapplication.data.model.EnvironmentTag
 import net.focustation.myapplication.data.model.SensorTimelinePoint
 import net.focustation.myapplication.data.model.SensorTimelines
 import net.focustation.myapplication.data.repository.FirestoreStudyRepository
@@ -213,6 +216,7 @@ private fun SessionReportDetailContent(
 
                 record != null -> {
                     SessionDetailHero(session = record)
+                    SessionEnvironmentTagsSection(session = record)
                     SensorTimelineSection(session = record)
                     EnvironmentAnalysisGrid(session = record)
                     SessionMetaSection(session = record)
@@ -355,6 +359,69 @@ private fun HeroMetric(
                 style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
             )
             Text(label, color = Color.White.copy(alpha = 0.64f), style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SessionEnvironmentTagsSection(session: StudySessionRecord) {
+    val tags = remember(session) { session.environmentTags() }
+    if (tags.isEmpty()) return
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(ReferenceDesignTokens.LargeRadius),
+        color = ReferenceDesignTokens.WhiteCard,
+        shadowElevation = 8.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                text = "환경 태그",
+                color = ReferenceDesignTokens.TextPrimary,
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+            )
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                tags.forEach { tag ->
+                    EnvironmentTagChip(tag = tag)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EnvironmentTagChip(tag: EnvironmentTag) {
+    val containerColor =
+        when (tag.tone) {
+            "positive" -> ReferenceDesignTokens.Blue.copy(alpha = 0.10f)
+            "warning" -> ColorNoise.copy(alpha = 0.16f)
+            else -> ReferenceDesignTokens.PaleBlueTrack
+        }
+    val labelColor =
+        when (tag.tone) {
+            "positive" -> ReferenceDesignTokens.BlueDark
+            "warning" -> Color(0xFF9B6400)
+            else -> ReferenceDesignTokens.TextPrimary
+        }
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = containerColor,
+    ) {
+        Box(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+            Text(
+                text = tag.label,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = labelColor,
+                maxLines = 1,
+            )
         }
     }
 }
@@ -661,6 +728,119 @@ private fun String?.toVibrationStatusLabel(): String? =
         "low" -> "안정"
         "moderate" -> "보통"
         "high" -> "흔들림"
+        else -> null
+    }
+
+private fun StudySessionRecord.environmentTags(): List<EnvironmentTag> {
+    val directTags = buildDirectEnvironmentTags().distinctBy { it.key }
+    if (directTags.isNotEmpty()) return directTags
+
+    return buildList {
+        if (hasAvgNoise) {
+            when {
+                avgNoise <= 40f -> add(EnvironmentTag("avg_noise_low", "조용한 편", "noise", "positive"))
+                avgNoise >= 60f -> add(EnvironmentTag("avg_noise_high", "소음 주의", "noise", "warning"))
+            }
+        }
+        if (hasAvgIlluminance) {
+            when {
+                avgIlluminance in 300f..700f -> add(EnvironmentTag("avg_light_ok", "조도 적정", "light", "positive"))
+                avgIlluminance < 300f -> add(EnvironmentTag("avg_light_dark", "어두운 편", "light", "warning"))
+            }
+        }
+        if (hasAvgVibration) {
+            when {
+                avgVibration <= 0.02 -> add(EnvironmentTag("avg_vibration_low", "진동 적음", "vibration", "positive"))
+                avgVibration >= 0.06 -> add(EnvironmentTag("avg_vibration_high", "흔들림 감지", "vibration", "warning"))
+            }
+        }
+    }
+}
+
+private fun StudySessionRecord.buildDirectEnvironmentTags(): List<EnvironmentTag> =
+    buildList {
+        reportEnvironmentSummary?.noise?.toNoiseTag()?.let(::add)
+        reportEnvironmentSummary?.light?.toLightTag()?.let(::add)
+        reportEnvironmentSummary?.vibration?.toVibrationTag()?.let(::add)
+
+        sensorSummary?.let { summary ->
+            val noiseMean = summary.noiseMeanDb
+            if (noiseMean != null) {
+                when {
+                    noiseMean <= 40.0 -> add(EnvironmentTag("sensor_noise_low", "조용한 편", "noise", "positive"))
+                    noiseMean >= 60.0 -> add(EnvironmentTag("sensor_noise_high", "소음 주의", "noise", "warning"))
+                }
+            }
+            if ((summary.noiseMaxDb ?: 0.0) >= 75.0) {
+                add(EnvironmentTag("sensor_noise_peak", "순간 소음 높음", "noise", "warning"))
+            }
+
+            val lightMean = summary.lightMeanLux
+            if (lightMean != null) {
+                when {
+                    lightMean in 300.0..700.0 ->
+                        add(EnvironmentTag("sensor_light_ok", "조도 적정", "light", "positive"))
+                    lightMean < 300.0 ->
+                        add(EnvironmentTag("sensor_light_dark", "어두운 편", "light", "warning"))
+                }
+            }
+            if ((summary.lightStdLux ?: 0.0) >= 180.0) {
+                add(EnvironmentTag("sensor_light_change", "조도 변화 큼", "light", "warning"))
+            }
+
+            val vibrationMean = summary.vibrationMean
+            if (vibrationMean != null) {
+                when {
+                    vibrationMean <= 0.02 ->
+                        add(EnvironmentTag("sensor_vibration_low", "진동 적음", "vibration", "positive"))
+                    vibrationMean >= 0.06 ->
+                        add(EnvironmentTag("sensor_vibration_high", "흔들림 감지", "vibration", "warning"))
+                }
+            }
+            if ((summary.vibrationMax ?: 0.0) >= 0.10) {
+                add(EnvironmentTag("sensor_vibration_peak", "흔들림 감지", "vibration", "warning"))
+            }
+            if ((summary.durationSec ?: durationSec) >= 3_600) {
+                add(EnvironmentTag("sensor_long_measurement", "장시간 측정", "measurement", "positive"))
+            }
+            if ((summary.sampleCount ?: 0) >= 120 || summary.reliability == "high") {
+                add(EnvironmentTag("sensor_high_reliability", "데이터 신뢰도 높음", "measurement", "positive"))
+            }
+        }
+
+        placeFeedback?.let { feedback ->
+            if (feedback.outletSatisfied == true) {
+                add(EnvironmentTag("feedback_outlet", "콘센트 만족", "feedback", "positive"))
+            }
+            if (feedback.seatAvailable == true) {
+                add(EnvironmentTag("feedback_seat", "좌석 여유", "feedback", "positive"))
+            }
+            if (feedback.workSuitable == true) {
+                add(EnvironmentTag("feedback_work_fit", "작업 적합", "feedback", "positive"))
+            }
+            if (feedback.comfortable == true) add(EnvironmentTag("feedback_comfort", "쾌적함", "feedback", "positive"))
+            if (feedback.highMovement == true) add(EnvironmentTag("feedback_movement", "움직임 많음", "feedback", "warning"))
+        }
+    }
+
+private fun String.toNoiseTag(): EnvironmentTag? =
+    when (this) {
+        "low" -> EnvironmentTag("summary_noise_low", "조용한 편", "noise", "positive")
+        "high" -> EnvironmentTag("summary_noise_high", "소음 주의", "noise", "warning")
+        else -> null
+    }
+
+private fun String.toLightTag(): EnvironmentTag? =
+    when (this) {
+        "comfortable" -> EnvironmentTag("summary_light_ok", "조도 적정", "light", "positive")
+        "too_dark" -> EnvironmentTag("summary_light_dark", "어두운 편", "light", "warning")
+        else -> null
+    }
+
+private fun String.toVibrationTag(): EnvironmentTag? =
+    when (this) {
+        "low" -> EnvironmentTag("summary_vibration_low", "진동 적음", "vibration", "positive")
+        "high" -> EnvironmentTag("summary_vibration_high", "흔들림 감지", "vibration", "warning")
         else -> null
     }
 
