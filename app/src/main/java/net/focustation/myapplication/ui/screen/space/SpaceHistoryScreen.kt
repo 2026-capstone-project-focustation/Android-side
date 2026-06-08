@@ -13,6 +13,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -71,6 +73,7 @@ import com.naver.maps.map.NaverMap
 import com.naver.maps.map.overlay.Marker
 import com.naver.maps.map.overlay.OverlayImage
 import com.naver.maps.map.util.FusedLocationSource
+import net.focustation.myapplication.data.model.EnvironmentTag
 import net.focustation.myapplication.data.model.SpaceRecord
 import net.focustation.myapplication.ui.components.MainBottomDestination
 import net.focustation.myapplication.ui.components.MainBottomNavigationBar
@@ -548,6 +551,8 @@ private fun SpaceDetailPopup(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val isPublicRecord = record.id.startsWith(PUBLIC_RECORD_ID_PREFIX)
+    val publicTags = remember(record) { if (isPublicRecord) record.publicEnvironmentTags() else emptyList() }
     Card(
         modifier =
             modifier
@@ -557,7 +562,10 @@ private fun SpaceDetailPopup(
         elevation = CardDefaults.cardElevation(0.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -592,12 +600,66 @@ private fun SpaceDetailPopup(
                 MetricText("조도", "%.0f lux".format(record.avgIlluminance), ColorLight)
                 MetricText("진동", "%.2f m/s²".format(record.avgVibration), ColorVibration)
             }
+            if (publicTags.isNotEmpty()) {
+                PublicEnvironmentTags(tags = publicTags)
+            }
             Text(
                 text = record.toSessionSummary(),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PublicEnvironmentTags(tags: List<EnvironmentTag>) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = "공개 환경 태그",
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+            color = FocusInk,
+        )
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            tags.forEach { tag ->
+                PublicEnvironmentTagPill(tag = tag)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PublicEnvironmentTagPill(tag: EnvironmentTag) {
+    val containerColor =
+        when (tag.tone) {
+            "positive" -> ColorFocus.copy(alpha = 0.12f)
+            "warning" -> ColorNoise.copy(alpha = 0.18f)
+            else -> ReferenceDesignTokens.PaleBlueTrack
+        }
+    val contentColor =
+        when (tag.tone) {
+            "positive" -> ColorFocus
+            "warning" -> Color(0xFF9B6400)
+            else -> FocusInk
+        }
+    Box(
+        modifier =
+            Modifier
+                .clip(RoundedCornerShape(16.dp))
+                .background(containerColor)
+                .padding(horizontal = 12.dp, vertical = 7.dp),
+    ) {
+        Text(
+            text = tag.label,
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+            color = contentColor,
+            maxLines = 1,
+        )
     }
 }
 
@@ -651,6 +713,27 @@ private fun LatLngBounds.notifyTo(onBoundsChanged: (Double, Double, Double, Doub
 }
 
 private fun SpaceRecord.toSessionSummary(): String = "세션 ${sessionCount}회 · 마지막 방문: $lastVisited"
+
+private fun SpaceRecord.publicEnvironmentTags(): List<EnvironmentTag> =
+    environmentTags.ifEmpty {
+        buildList {
+            when {
+                avgNoise <= 40f -> add(EnvironmentTag("fallback_noise_low", "조용한 편", "noise", "positive"))
+                avgNoise >= 60f -> add(EnvironmentTag("fallback_noise_high", "소음 주의", "noise", "warning"))
+            }
+            when {
+                avgIlluminance in 300f..700f ->
+                    add(EnvironmentTag("fallback_light_ok", "조도 적정", "light", "positive"))
+                avgIlluminance < 300f ->
+                    add(EnvironmentTag("fallback_light_dark", "어두운 편", "light", "warning"))
+            }
+            when {
+                avgVibration <= 0.02 -> add(EnvironmentTag("fallback_vibration_low", "진동 적음", "vibration", "positive"))
+                avgVibration >= 0.06 ->
+                    add(EnvironmentTag("fallback_vibration_high", "흔들림 감지", "vibration", "warning"))
+            }
+        }
+    }
 
 @Preview(showBackground = true)
 @Composable
