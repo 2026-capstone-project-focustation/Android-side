@@ -185,6 +185,8 @@ function seededMetrics(index) {
     avgNoise,
     avgIlluminance,
     avgVibration,
+    sensorRollup: seededSensorRollup(index, avgNoise, avgIlluminance, avgVibration),
+    feedbackRollup: seededFeedbackRollup(index),
     environmentSummary: {
       noise: avgNoise < 40 ? "low" : avgNoise < 70 ? "moderate" : "high",
       light: avgIlluminance <= 0 ?
@@ -197,6 +199,55 @@ function seededMetrics(index) {
       vibration: avgVibration < 0.03 ? "low" : avgVibration < 0.1 ? "moderate" : "high",
     },
   };
+}
+
+function seededSensorRollup(index, avgNoise, avgIlluminance, avgVibration) {
+  const noiseStd = 2.8 + (index % 5) * 1.4;
+  const noiseSpikeCount = index % 6;
+  const lightStd = 70 + (index % 6) * 55;
+  const vibrationSpikeCount = index % 5;
+  const measurementDurationSec = 900 + (index % 8) * 420;
+  const validSampleRatio = 0.82 + (index % 5) * 0.04;
+  const phoneMovementRatio = 0.03 + (index % 4) * 0.025;
+
+  return {
+    noiseStdDbAvg: round(noiseStd, 1),
+    noiseMaxDbAvg: round(avgNoise + 10 + (index % 4) * 3, 1),
+    noiseP90DbAvg: round(avgNoise + 4 + (index % 5) * 2.2, 1),
+    noiseSpikeCountAvg: round(noiseSpikeCount, 1),
+    lightStdLuxAvg: round(lightStd, 1),
+    lightMinLuxAvg: round(Math.max(1, avgIlluminance - lightStd * 1.4), 1),
+    lightMaxLuxAvg: round(avgIlluminance + lightStd * 1.6, 1),
+    vibrationStdAvg: round(avgVibration * 0.45, 4),
+    vibrationMaxAvg: round(avgVibration + 0.035 + (index % 4) * 0.011, 4),
+    vibrationP95Avg: round(avgVibration + 0.018 + (index % 4) * 0.008, 4),
+    vibrationSpikeCountAvg: round(vibrationSpikeCount, 1),
+    measurementDurationSecAvg: measurementDurationSec,
+    validSampleRatioAvg: round(Math.min(validSampleRatio, 0.98), 2),
+    phoneMovementRatioAvg: round(phoneMovementRatio, 3),
+  };
+}
+
+function seededFeedbackRollup(index) {
+  const high = 4.2 + (index % 3) * 0.25;
+  const mid = 3.2 + (index % 4) * 0.2;
+  return {
+    placeQuietAvg: round(index % 4 === 0 ? high : mid, 1),
+    placeLightAvg: round(index % 5 === 0 ? high : 3.8, 1),
+    placeLowCrowdAvg: round(index % 3 === 0 ? high : mid, 1),
+    placeLowVisualDistractionAvg: round(index % 4 === 1 ? high : mid, 1),
+    placeControlAvg: round(index % 5 === 1 ? high : mid, 1),
+    placeComfortAvg: round(index % 3 === 1 ? high : 3.7, 1),
+    placeOutletAvg: round(index % 2 === 0 ? high : 3.4, 1),
+    placeTaskFitAvg: round(index % 3 !== 2 ? high : 3.6, 1),
+    placeTemperatureAirAvg: round(index % 4 === 2 ? high : 3.5, 1),
+    placeSeatAvailabilityAvg: round(index % 5 === 2 ? high : 3.3, 1),
+  };
+}
+
+function round(value, digits) {
+  const multiplier = 10 ** digits;
+  return Math.round(value * multiplier) / multiplier;
 }
 
 async function buildPlaces() {
@@ -246,6 +297,11 @@ async function getFirebaseAccessToken() {
 async function main() {
   const accessToken = await getFirebaseAccessToken();
   const now = new Date();
+  if (process.argv.includes("--backfill-only")) {
+    await backfillSeedRollups(accessToken);
+    return;
+  }
+
   const places = await buildPlaces();
   const writes = places.map((place) => {
     const placeKey = docId(place.placeName, place.latitude, place.longitude);
@@ -286,6 +342,99 @@ async function main() {
   }
 
   console.log(`Seeded ${places.length} public place reports.`);
+  await backfillSeedRollups(accessToken);
+}
+
+async function backfillSeedRollups(accessToken) {
+  const documents = await listPublicPlaceReports(accessToken);
+  const writes = documents
+    .map((document, index) => {
+      const fields = document.fields || {};
+      if (!toBoolean(fields.isSeed)) return null;
+      if (fields.sensorRollup && fields.feedbackRollup) return null;
+
+      const avgNoise = toNumber(fields.avgNoise) ?? 44;
+      const avgIlluminance = toNumber(fields.avgIlluminance) ?? 500;
+      const avgVibration = toNumber(fields.avgVibration) ?? 0.03;
+      return {
+        update: {
+          name: document.name,
+          fields: {
+            ...fields,
+            sensorRollup: firestoreValue(
+              seededSensorRollup(index, avgNoise, avgIlluminance, avgVibration),
+            ),
+            feedbackRollup: firestoreValue(seededFeedbackRollup(index)),
+            updatedAt: firestoreValue(new Date()),
+          },
+        },
+      };
+    })
+    .filter(Boolean);
+
+  if (writes.length === 0) {
+    console.log("No seed rollup backfill needed.");
+    return;
+  }
+
+  await batchWrite(accessToken, writes);
+  console.log(`Backfilled ${writes.length} seeded public place reports.`);
+}
+
+async function listPublicPlaceReports(accessToken) {
+  const documents = [];
+  let pageToken = "";
+  do {
+    const url = new URL(
+      `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/${COLLECTION}`,
+    );
+    url.searchParams.set("pageSize", "100");
+    if (pageToken) {
+      url.searchParams.set("pageToken", pageToken);
+    }
+
+    const response = await fetch(url, {
+      headers: {Authorization: `Bearer ${accessToken}`},
+    });
+    const body = await response.text();
+    if (!response.ok) {
+      throw new Error(`Firestore list failed: ${response.status} ${body}`);
+    }
+    const json = JSON.parse(body);
+    documents.push(...(json.documents || []));
+    pageToken = json.nextPageToken || "";
+  } while (pageToken);
+
+  return documents;
+}
+
+async function batchWrite(accessToken, writes) {
+  const response = await fetch(
+    `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents:batchWrite`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({writes}),
+    },
+  );
+  const body = await response.text();
+
+  if (!response.ok) {
+    throw new Error(`Firestore seed failed: ${response.status} ${body}`);
+  }
+}
+
+function toNumber(value) {
+  if (!value) return null;
+  const parsed = Number(value.doubleValue ?? value.integerValue);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function toBoolean(value) {
+  return value?.booleanValue === true;
 }
 
 main().catch((error) => {
