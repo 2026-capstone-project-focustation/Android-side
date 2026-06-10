@@ -32,6 +32,7 @@ data class SpaceRecord(
     val avgIlluminance: Float,
     val avgVibration: Double,
     val lastVisited: String,
+    val environmentTags: List<EnvironmentTag> = emptyList(),
 )
 
 data class FocusDataPoint(
@@ -48,4 +49,11 @@ data class SensorTimelines(
     val noise: List<SensorTimelinePoint> = emptyList(),
     val light: List<SensorTimelinePoint> = emptyList(),
     val vibration: List<SensorTimelinePoint> = emptyList(),
+)
+
+data class EnvironmentTag(
+    val key: String,
+    val label: String,
+    val category: String,
+    val tone: String = "neutral",
 )

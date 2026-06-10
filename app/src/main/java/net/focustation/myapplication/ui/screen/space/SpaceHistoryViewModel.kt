@@ -190,6 +190,7 @@ private fun List<PublicPlaceReportRecord>.toPublicSpaceRecords(): List<SpaceReco
                 avgIlluminance = report.avgIlluminance.toFloat(),
                 avgVibration = report.avgVibration,
                 lastVisited = report.lastReportedAt ?: "공개 요약",
+                environmentTags = report.environmentTags,
             )
         }
 
